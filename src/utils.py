@@ -2,37 +2,49 @@
 # BoMeyering, 2024
 
 import yaml
+import os
+import pathlib
+import argparse
+from pathlib import Path
+from typing import Union
 
-def load_yaml_config(path):
-    """_summary_
-
-    Args:
-        path (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    with open(path, 'r') as file:
-        return yaml.safe_load(file)
     
-def set_args_attr(config, args):
-    """_summary_
+class YamlConfigLoader:
+    def __init__(self, path: Union[Path, str]) -> None:
+        if not isinstance(path, (str, pathlib.Path)):
+            raise TypeError(f"'path' argument should be either type 'str' or 'pathlib.Path', not type {type(path)}.")
+        if not str(path).endswith(('.yml', '.yaml')):
+            raise ValueError(f"path should be a Yaml file ending with either '.yamll' or '.yml'.")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"File path at {path} does not exist. Please specify a different path")
+        
+        self.path = path
 
-    Args:
-        config (_type_): _description_
-        args (_type_): _description_
+    def load_config(self) -> dict:
+        """Reads a yaml config file at path and returns a dictionary of config arguments.
 
-    Returns:
-        _type_: _description_
-    """
-    for k, v in config.items():
-        if type(v) is dict:
-            set_args_attr(v, args)
-        elif getattr(args, k, None) is None:
-            setattr(args, k, v)
-    return args
+        Returns:
+            dict: A dictionary of key/value pairs for the arguments in the config file.
+        """
+        with open(self.path, 'r') as file:
+            return yaml.safe_load(file)
+        
+class ArgsAttributeSetter:
+    def __init__(self, args: argparse.Namespace, config: dict) -> None:
+        if not isinstance(args, argparse.Namespace):
+            raise TypeError(f"'args' should be an argparse.Namespace object.")
+        if not isinstance(config, dict):
+            raise TypeError(f"'config' should be an dict object.")
+        self.args = args
+        self.config = config
 
-class ConfigParser():
-    def __init__(self, args, config_path) -> None:
+    def set_args_attr(self) -> argparse.Namespace:
+        """Takes a parsed yaml config file as a dict and adds the arguments to the args namespace.
 
-        pass
+        Returns:
+            argparse.Namespace: The args namespace updated with the configuration parameters.
+        """
+        for k, v in self.config.items():
+            if getattr(self.args, k, None) is None:
+                setattr(self.args, k, v)
+        return self.args
