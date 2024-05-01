@@ -1,12 +1,15 @@
 import unittest
 import argparse
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 from src.utils import YamlConfigLoader, ArgsAttributeSetter
+from random import randint
 
 class TestYamlConfigLoader(unittest.TestCase):
+    
     def test_init_with_invalid_path_type(self):
         with self.assertRaises(TypeError):
-            YamlConfigLoader(123)
+            for i in range(10):
+                YamlConfigLoader(randint(100, 4000))
 
     def test_init_with_nonexistent_path(self):
         with self.assertRaises(FileNotFoundError):
@@ -16,13 +19,13 @@ class TestYamlConfigLoader(unittest.TestCase):
         with self.assertRaises(ValueError):
             YamlConfigLoader("config.txt")
 
-    def test_load_config(self):
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch("yaml.safe_load", return_value={"parameter": 0.0001})
+    def test_load_config(self, mock_open, mock_safe_load):
         # Mocking open and yaml.safe_load
-        with unittest.mock.patch("builtins.open", unittest.mock.mock_open(read_data="key: value")):
-            # config_loader = YamlConfigLoader(MagicMock())
-            config_loader = YamlConfigLoader("tests/test_config.yaml")
-            config = config_loader.load_config()
-            self.assertEqual(config, {"key": "value"})
+        config_loader = YamlConfigLoader("tests/test_config.yaml")
+        config = config_loader.load_config()
+        self.assertEqual(config, {"parameter": 0.0001})
 
 class TestArgsAttributeSetter(unittest.TestCase):
     def test_init_with_invalid_args_type(self):
