@@ -1,5 +1,5 @@
-# Utils
-# BoMeyering, 2024
+# Config/Args Utility Functions
+# BoMeyering 2024
 
 import yaml
 import os
@@ -45,6 +45,11 @@ class ArgsAttributeSetter:
             argparse.Namespace: The args namespace updated with the configuration parameters.
         """
         for k, v in self.config.items():
-            if getattr(self.args, k, None) is None:
+            # print("KEY: ", k, type(k))
+            # print("VALUE: ", v, type(v))
+            if isinstance(v, dict):
+                setattr(self.args, k, argparse.Namespace(**v))
+            else:
                 setattr(self.args, k, v)
+                
         return self.args

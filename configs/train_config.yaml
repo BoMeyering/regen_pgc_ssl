@@ -1,26 +1,29 @@
 # Training configs
-model_run: model_run_name
-
-# Directories
-train_dir: 
-val_dir:
-test_dir:
-output_dir:
-
-# Model parameters
-model_name:
-weight_decay:
-filter_bias_and_bn: True
-num_classes:
-input_channels:
-encoder_name:
-encoder_depth: 5
-
-# Optimizer
-optim_name:
-lr:
-momentum:
-beta1:
-beta2:
-nesterov: True
+general:
+  model_run: model_run_name
+hardware:
+  device: 'cuda'
+directories:
+  train_dir: 
+  val_dir:
+  test_dir:
+  output_dir:
+model:
+  model_name: deeplabv3
+  weight_decay: 1e-5
+  filter_bias_and_bn: True
+  ema: True # Exponential moving average of model parameters
+  ema_decay: 0.999
+  num_classes: 10
+  in_channels: 3
+  encoder_name: resnet18
+  encoder_weights: imagenet
+  encoder_depth: 5
+optimizer:
+  optim_name: sgd
+  lr: 0.001
+  momentum: 0.99
+  beta1:
+  beta2:
+  nesterov: True
 
