@@ -52,7 +52,7 @@ class ArgsAttributeSetter:
             print(f"Setting default run_name to 'default_run_{now}'")
             self.args.general = argparse.Namespace(**{'run_name': "_".join(('default_run', now))})
 
-    def set_args_attr(self) -> argparse.Namespace:
+    def set_args_attr(self, check_run_name=True) -> argparse.Namespace:
         """Takes a parsed yaml config file as a dict and adds the arguments to the args namespace.
 
         Returns:
@@ -63,7 +63,7 @@ class ArgsAttributeSetter:
                 setattr(self.args, k, argparse.Namespace(**v))
             else:
                 setattr(self.args, k, v)
-        
-        self.append_timestamp_to_run()
+        if check_run_name:
+            self.append_timestamp_to_run()
 
         return self.args

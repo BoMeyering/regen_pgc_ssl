@@ -29,7 +29,7 @@ def main(args):
         raise FileNotFoundError(f"Path to config file {args.config} does not exist. Please specify a different path")
     config = YamlConfigLoader(args.config).load_config()
     print(config)
-    args = ArgsAttributeSetter(args, config).set_args_attr()
+    args = ArgsAttributeSetter(args, config).set_args_attr(check_run_name=False)
 
     means = torch.zeros(3)
     std = torch.zeros(3)
@@ -54,6 +54,8 @@ def main(args):
             means += channel_means
             std += channel_std
             pixel_n += pixels
+
+            new_batch = batch.squeeze()
 
         print(means)
         print(channel_std)
