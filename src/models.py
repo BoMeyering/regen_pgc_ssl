@@ -27,7 +27,7 @@ def create_smp_model(args: argparse.Namespace) -> torch.nn.Module:
             in_channels=args.model.in_channels, 
             classes=args.model.num_classes
         )
-    elif args.model.model_name == 'unet_plusplus':
+    elif args.model.model_name == 'unetplusplus':
         model = smp.UnetPlusPlus(
             encoder_name=args.model.encoder_name,
             encoder_depth=args.model.encoder_depth,
@@ -82,7 +82,7 @@ def create_smp_model(args: argparse.Namespace) -> torch.nn.Module:
             in_channels=args.model.in_channels, 
             classes=args.model.num_classes
         )
-    elif args.model.model_name == 'deeplabv3_plus':
+    elif args.model.model_name == 'deeplabv3plus':
         model = smp.DeepLabV3Plus(
             encoder_name=args.model.encoder_name,
             encoder_depth=args.model.encoder_depth,
@@ -91,6 +91,6 @@ def create_smp_model(args: argparse.Namespace) -> torch.nn.Module:
             classes=args.model.num_classes
         )
     else:
-        raise ValueError(f'args.model.model_name: {args.model.model_name} is not a valid model name for the smp framework. Please select an architecture')
+        raise ValueError(f"args.model.model_name: {args.model.model_name} is not a valid model name for the smp framework. Please select a different architecture from {list(map(str.lower, dir(smp)[:9]))}")
 
     return model

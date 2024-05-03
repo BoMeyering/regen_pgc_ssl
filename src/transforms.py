@@ -56,10 +56,19 @@ def get_val_transforms(args):
 
     return transforms
 
-def get_null_transforms(args):
+def get_null_transforms():
     transforms = A.Compose([
         A.Normalize(),
         ToTensorV2()
     ])
+
+    return transforms
+
+def get_tensor_transforms():
+    transforms = A.Compose([
+        ToTensorV2(p=1.0)
+    ])
+
+    return transforms
 
     return True

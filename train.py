@@ -23,12 +23,14 @@ def main(args):
     config_loader = YamlConfigLoader(args.config)
     config = config_loader.load_config()
 
-    # Instantiate args namespace with config
+    # Instantiate args namespace with config and set values
     arg_setter = ArgsAttributeSetter(args, config)
     args = arg_setter.set_args_attr()
 
-    print(args)
-    # Create the model
+    # Ensure args has a training run_name
+    args = arg_setter.set_nested_key(args, ('general', 'run_name'))
+
+    # Create model specified in configs
     model = create_smp_model(args)
 
     # Get model parameters and weight decay. Filter out bias and batch norm parameters if necessary
@@ -41,9 +43,12 @@ def main(args):
     if args.model.ema:
         ema = EMA(model, args.model.ema_decay)
 
+    # Build Datasets and Dataloaders
+    
+
+
     return args
 
 
 if __name__ == '__main__':
     configs = main(args)
-    print(configs)
