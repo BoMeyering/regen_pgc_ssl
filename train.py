@@ -28,7 +28,7 @@ def main(args):
     args = arg_setter.set_args_attr()
 
     # Ensure args has a training run_name
-    args = arg_setter.set_nested_key(args, ('general', 'run_name'))
+    # args = arg_setter.set_nested_key(args, ('general', 'run_name'))
 
     # Create model specified in configs
     model = create_smp_model(args)
@@ -44,8 +44,6 @@ def main(args):
         ema = EMA(model, args.model.ema_decay)
 
     # Build Datasets and Dataloaders
-    
-
 
     return args
 

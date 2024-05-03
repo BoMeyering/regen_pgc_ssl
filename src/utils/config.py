@@ -39,19 +39,18 @@ class ArgsAttributeSetter:
             raise TypeError(f"'config' should be an dict object.")
         self.args = args
         self.config = config
-
-    def set_nested_key(self, args: argparse.Namespace, keys: Tuple[str, str], value: Any='default_value') -> None:
-
-        if not hasattr(args, keys[0]):
-            setattr(args, keys[0], argparse.Namespace())
-        namespace = getattr(args, keys[0])
-        if not hasattr(namespace, keys[1]):
-            setattr(namespace, keys[1], value)
-        
-        self.args = args
-
-        return self.args
-
+    
+    def append_timestamp_to_run(self):
+        now = datetime.now().isoformat(timespec='seconds', sep='_')
+        try:
+            if hasattr(self.args.general, 'run_name'):
+                self.args.general.run_name = "_".join((self.args.general.run_name, now))
+            elif hasattr(self.args, 'general'):
+                self.args.general.run_name = "_".join(('default_run', now))
+        except AttributeError as e:
+            print(e)
+            print(f"Setting default run_name to 'default_run_{now}'")
+            self.args.general = argparse.Namespace(**{'run_name': "_".join(('default_run', now))})
 
     def set_args_attr(self) -> argparse.Namespace:
         """Takes a parsed yaml config file as a dict and adds the arguments to the args namespace.
@@ -65,15 +64,6 @@ class ArgsAttributeSetter:
             else:
                 setattr(self.args, k, v)
         
-        if self.args.general.run_name:
-            now = datetime.now().isoformat(timespec='seconds', sep='_')
-            self.args.general.run_name = "_".join((self.args.general.run_name, now))
-        else:
-            self.args.general.run_name
+        self.append_timestamp_to_run()
+
         return self.args
-
-def increment_training_run(args):
-    run = args.general.training_run
-    checkpoint_dir = args.directories.chkpt_dir
-
-    current_runs = os.listdir(checkpoint_dir)
