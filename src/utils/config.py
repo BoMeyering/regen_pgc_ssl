@@ -7,6 +7,8 @@ import pathlib
 import argparse
 from pathlib import Path
 from typing import Union
+from datetime import datetime
+from typing import Tuple, Any
 
     
 class YamlConfigLoader:
@@ -37,6 +39,18 @@ class ArgsAttributeSetter:
             raise TypeError(f"'config' should be an dict object.")
         self.args = args
         self.config = config
+    
+    def append_timestamp_to_run(self):
+        now = datetime.now().isoformat(timespec='seconds', sep='_')
+        try:
+            if hasattr(self.args.general, 'run_name'):
+                self.args.general.run_name = "_".join((self.args.general.run_name, now))
+            elif hasattr(self.args, 'general'):
+                self.args.general.run_name = "_".join(('default_run', now))
+        except AttributeError as e:
+            print(e)
+            print(f"Setting default run_name to 'default_run_{now}'")
+            self.args.general = argparse.Namespace(**{'run_name': "_".join(('default_run', now))})
 
     def set_args_attr(self) -> argparse.Namespace:
         """Takes a parsed yaml config file as a dict and adds the arguments to the args namespace.
@@ -45,11 +59,11 @@ class ArgsAttributeSetter:
             argparse.Namespace: The args namespace updated with the configuration parameters.
         """
         for k, v in self.config.items():
-            # print("KEY: ", k, type(k))
-            # print("VALUE: ", v, type(v))
             if isinstance(v, dict):
                 setattr(self.args, k, argparse.Namespace(**v))
             else:
                 setattr(self.args, k, v)
-                
+        
+        self.append_timestamp_to_run()
+
         return self.args
