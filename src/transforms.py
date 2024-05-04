@@ -70,5 +70,3 @@ def get_tensor_transforms():
     ])
 
     return transforms
-
-    return True

@@ -3,12 +3,11 @@
 
 import torch
 import os
-import cv2
 import sys
+import json
 import argparse
-import numpy as np
-import albumentations as A
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
+from typing import Tuple
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 root_directory = os.path.dirname(script_directory)
@@ -16,54 +15,60 @@ sys.path.append(root_directory)
 
 from src.utils.config import YamlConfigLoader, ArgsAttributeSetter
 from src.data import StatDataset
+from src.utils.welford import WelfordCalculator
 
+# Grab config and parse
 parser = argparse.ArgumentParser()
-
 parser.add_argument('config', help="The path to the yaml configuration file which defines the directories containing the images")
 args = parser.parse_args()
 
+# Set image directory paths to args
+if not os.path.exists(args.config):
+    raise FileNotFoundError(f"Path to config file {args.config} does not exist. Please specify a different path")
+config = YamlConfigLoader(args.config).load_config()
+args = ArgsAttributeSetter(args, config).set_args_attr(check_run_name=False)
+
+# Set device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-def main(args):
-    if not os.path.exists(args.config):
-        raise FileNotFoundError(f"Path to config file {args.config} does not exist. Please specify a different path")
-    config = YamlConfigLoader(args.config).load_config()
-    print(config)
-    args = ArgsAttributeSetter(args, config).set_args_attr(check_run_name=False)
+def main(args: argparse.Namespace) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute channel-wise pixel mean and std over a list of datasets in args
 
-    means = torch.zeros(3)
-    std = torch.zeros(3)
-    pixel_n = torch.zeros(1)
+    Args:
+        args (argparse.Namespace): Args containing key 'training_dirs' with a list value containing all the image directories used for training
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: Tensors of channel wise mean and std in RGB format
+    """
+
+    welford = WelfordCalculator()
 
     for path in args.training_dirs:
-        print(path)
         ds = StatDataset(dir_path=path)
         dl = DataLoader(
             ds, 
             shuffle=False, 
             num_workers=2,
-            pin_memory=True
+            pin_memory=True,
+            batch_size=1
         )
 
         for i, batch in enumerate(dl):
+            batch = batch.squeeze().to(device)
+            welford.update(batch)
 
-            channel_means = torch.sum(batch, dim=(0, 2, 3))
-            channel_std = torch.sum(batch ** 2, dim=(0, 2, 3))
-            pixels = batch.shape[2] * batch.shape[3]
-
-            means += channel_means
-            std += channel_std
-            pixel_n += pixels
-
-            new_batch = batch.squeeze()
-
-        print(means)
-        print(channel_std)
-        print(pixel_n)
-
+    mean, std = welford.compute()
+     
+    return mean, std
 
 if __name__ == '__main__':
-    args = main(args)
+    means, std = main(args)
 
-    # for i in args.training_dirs:
-        # print(i)
+    norm_dict = {
+        'means': [i.item() for i in means],
+        'std': [i.item() for i in std]
+    }
+
+    with open(args.out_path, 'w') as f:
+        json.dump(norm_dict, f)
