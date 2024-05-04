@@ -1,3 +1,4 @@
+#!/bin/bash
 set -e
 echo "Downloading S3 datasets"
 if [ -f ~/.aws/config ] && [ -f ~/.aws/credentials ]; then
@@ -16,6 +17,7 @@ else
     echo "Downloading grass-clover-dataset 'synthetic_images'"
     if [ ! -d ./grass-clover-dataset ]; then
         mkdir ./grass-clover-dataset
+    fi
     cd ./grass-clover-dataset
     wget -q --spider https://vision.eng.au.dk/?download=/data/GrassClover/synthetic_images.zip -cO synthetic_images.zip # remove --spider for no dry run
     (unzip synthetic_images.zip && rm -f synthetic_images.zip) || exit 1
