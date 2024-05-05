@@ -4,11 +4,11 @@ import torch
 import sys
 
 class WelfordCalculator:
-    def __init__(self):
-        self.M = torch.zeros(3, dtype=torch.float64)
-        self.M_old = torch.zeros(3, dtype=torch.float64)
-        self.S = torch.zeros(3, dtype=torch.float64)
-        self.N = torch.zeros(1, dtype=torch.long)
+    def __init__(self, device: str):
+        self.M = torch.zeros(3, dtype=torch.float64).to(device)
+        self.M_old = torch.zeros(3, dtype=torch.float64).to(device)
+        self.S = torch.zeros(3, dtype=torch.float64).to(device)
+        self.N = torch.zeros(1, dtype=torch.long).to(device)
 
     def update(self, array: torch.Tensor):
         if (len(array.shape) > 3) or (array.shape[0] != 3):

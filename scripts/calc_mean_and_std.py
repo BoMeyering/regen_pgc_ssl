@@ -6,8 +6,12 @@ import os
 import sys
 import json
 import argparse
+import logging
+import datetime
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 from typing import Tuple
+from logging import Logger, getLogger
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 root_directory = os.path.dirname(script_directory)
@@ -16,6 +20,18 @@ sys.path.append(root_directory)
 from src.utils.config import YamlConfigLoader, ArgsAttributeSetter
 from src.data import StatDataset
 from src.utils.welford import WelfordCalculator
+
+logger = Logger('norm_calc_logger', level='DEBUG')
+logger = logging.getLogger('norm_calc_logger')
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+
+file_handler = logging.FileHandler('logs/norm_calc_log'+datetime.datetime.now().isoformat(timespec='seconds', sep="_"))
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+
 
 # Grab config and parse
 parser = argparse.ArgumentParser()
@@ -42,9 +58,10 @@ def main(args: argparse.Namespace) -> Tuple[torch.Tensor, torch.Tensor]:
         Tuple[torch.Tensor, torch.Tensor]: Tensors of channel wise mean and std in RGB format
     """
 
-    welford = WelfordCalculator()
+    welford = WelfordCalculator(device=device)
 
     for path in args.training_dirs:
+        logger.info(f"Calculating mean and std for path {path}")
         ds = StatDataset(dir_path=path)
         dl = DataLoader(
             ds, 
@@ -54,9 +71,20 @@ def main(args: argparse.Namespace) -> Tuple[torch.Tensor, torch.Tensor]:
             batch_size=1
         )
 
+        pbar = tqdm(total=len(dl), desc="Overall Progress", unit="image")
         for i, batch in enumerate(dl):
-            batch = batch.squeeze().to(device)
-            welford.update(batch)
+            # unpack the batch
+            img, key = batch
+            pbar.set_description(f"Processing {key}")
+            if len(img.shape) < 3:
+                logger.debug(f"Image {key} in dataset {path} is corrupt. Please check the image integrity")
+                continue
+            
+            img = img.squeeze().to(device)
+            welford.update(img)
+            pbar.update(1)
+        logger.info(f"Finished incorporating data from {path} into mean and std calculations")
+        pbar.close()
 
     mean, std = welford.compute()
      
