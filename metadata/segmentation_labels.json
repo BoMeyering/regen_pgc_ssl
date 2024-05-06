@@ -3,8 +3,7 @@
     "residue": 1,
     "pgc_grass": 2,
     "pgc_clover": 3,
-    "grass_weed": 4,
-    "broadleaf_weed": 5,
-    "maize": 6,
-    "soybean": 7
+    "broadleaf_weed": 4,
+    "maize": 5,
+    "soybean": 6
 }
