@@ -1,7 +1,7 @@
 # RegenPGC SSL Segmentation Modeling
 This Github Repository holds all of the training code needed for development of the groundcover detection, segmentation, and estimation modeling for the RegenPGC project.
 
-## Modeling Goals
+## :bar_chart: Modeling Goals
 
 There are currently over 3,500 images of perennial groundcover (PGC) species in a multitude of experimental plots and row cropping trials and studies. Our goal is to deveope a segmentation model to easily segment and classify the different portions of the images corresponding `soil`, `pgc_grass`, `weeds`, `crop_residue`, etc. Unfortunately, the main challenge of image annotation remains.
 Masking out these images is time-consuming and requires technical knowledge of the system and great attention to minute details. This has been one of the largest hurdles in  development so far. 
@@ -41,19 +41,87 @@ Due to the overwhelming nature of the unlabeled dataset we have, we can leverage
     <figcaption>Flowchart of the main steps involved in the FixMatch SSL algorithm.</figcaption>
 </figure>
 
-# Environment Setup
+# :computer: Environment Setup
 Set up a `pyenv` virtual environment or whatever flavor of virtual environment you like
 ```
 $ pyenv virtualenv <YOUR PYTHON VERSION HERE> <VIRTUALENV NAME>
 $ pyenv local
 ```
 
-# Data Download
+# :arrow_double_down: Data Download
 
 Several datasets need to be downloaded in order to train this model
-* First, we need to get the synthetic images and masks from the GrassClover Dataset. 
+Ensure that you have AWS Cli installed and configured. 
+There is a shell script that will download all of the data for you and unpack it in your local directory.
+From the root folder of the repo, make the download script executable
     ```
-    $ wget https://vision.eng.au.dk/?download=/data/GrassClover/synthetic_images.zip -cO synthetic_images.zip
+    $ chmod +x scripts/download_data.sh
     ```
-* Second, we need to grab the CropAndWeed Dataset. Navigate to the authors' [GitHub repo](https://github.com/cropandweed/cropandweed-dataset/tree/main) and follow the instructions there to download the data.
+Then call
+    ```
+    $ scripts/download_data.sh
+    ```
+This should download everything needed to train the model and unpack them into the right directories.
+Even if you don't have the creds for AWS, you should still be able to get most of the datasets as it will check and download them directly from the source. This route takes longer though.
 
+# :hammer_and_wrench: Data Preprocessing
+Each of the datasets originally has very different mask structures. For instance, the grass clover dataset has `.png` images with the following categories and pixel values"
+> 0. soil
+> 1. clover
+> 2. grass
+> 3. weeds
+> 4. white clover
+> 5. red clover
+> 6. dandelion
+> 7. shepherds_purse
+> 8. thistle
+> 9. white_clover_flower
+> 10. white_clover_leaf
+> 11. red_clover_flower
+> 12. red_clover_leaf
+> 13. unknown_clover_leaf
+> 14. unknown_clover_flower
+
+This dataset is focused on identifying different parts of clover and distinguishing a few different weed species. But all we really care about for this dataset are the categories
+> 0. soil
+> 1. clover
+> 2. grass
+> 3. weeds
+
+Since everything can be grouped up into these more general categories, we need to map the original labels such that 
+> 0. soil = {soil}
+> 1. clover = {clover, white clover, red clover, white_clover_leaf, white_clover_flower, red_clover_leaf, red_clover_flower, unknown_clover_leaf, unknown_clover_flower}
+> 2. grass = {grass}
+> 3. weeds = {weeds, dandelion, shepherd's purse, thistle}
+
+Finally, these supercategories need to be mapped back to our pixel specification in `segmentation_labels.json`
+> * soil -> soil = 0
+> * clover -> pgc_clover = 3
+> * grass -> pgc_grass = 2
+> * weeds -> broadleaf_weed = 4
+
+Thus for each image in the dataset, a new mask will need to be created which caputres all of these categories.
+
+A similar mapping will need to be created for each dataset which has masks in different formats.
+
+# To Do 
+* Mapping script and functions for each dataset
+    * Output is .png of shape (1, H, W) where H, W is the same as base image.
+    * Mapped to correct classes
+* Finish DataSets and DataLoaders for labeled and unlabeled datasets
+    * Should I wrap all these in Lighting modules?
+    * Make the length of each loader the same, easiest way to wrap them using '%%' ?
+    * Set the batch size you want for each labeled and unlabled imageset and then set the _getitem_ method 
+    * Custom Sampler or WeightedRandomResampler??
+    * Lightning has some utilities like `from pl_bolts.utils.semi_supervised import balance_classes`
+* Set up weighted loss criterion with `smp.losses`
+    * args $\lambda$ and loss criterion
+    * `total_loss = labeled_loss + lam * unlabeled_loss`
+* Set up prediction and ground truth visualization functionalities
+    * Overlay of target mask on orginal image
+    * Overlay of prediction mask on original image
+* Start to think about training the object detector?
+    * K1702 dataset contains all of the quadrat images
+    * Train a fast detector on that and use to predict UKY quadrat images as well as older kura clover image data from **venkat, schlautman, rife et al**
+    * Train the marker detection model using the old images I took plus the new annotated ones and implement a ssl scheme
+    * Run predictions over entire set of K1702, RegenPGC photos to get all annotations of markers and quadrat corners.
