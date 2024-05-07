@@ -4,7 +4,7 @@
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-def get_train_transforms(args):
+def get_train_transforms():
     
     transforms = A.Compose([
         A.Affine(),
@@ -20,7 +20,7 @@ def get_train_transforms(args):
 
     return transforms
 
-def get_strong_transforms(args):
+def get_strong_transforms():
 
     transforms = A.Compose([
         A.Affine(),
@@ -32,11 +32,11 @@ def get_strong_transforms(args):
         A.RGBShift(),
         A.Normalize(),
         ToTensorV2()
-    ], additional_targets={'target': 'mask'})
+    ])
 
     return transforms
 
-def get_weak_transforms(args):
+def get_weak_transforms():
 
     transforms = A.Compose([
         A.Affine(),
@@ -44,11 +44,11 @@ def get_weak_transforms(args):
         A.HorizontalFlip(),
         A.Normalize(),
         ToTensorV2()
-    ], additional_targets={'target': 'mask'})
+    ])
 
     return transforms
 
-def get_val_transforms(args):
+def get_val_transforms():
     transforms = A.Compose([
         A.Normalize(),
         ToTensorV2()
@@ -60,13 +60,13 @@ def get_null_transforms():
     transforms = A.Compose([
         A.Normalize(),
         ToTensorV2()
-    ])
+    ], additional_targets={'target': 'mask'})
 
     return transforms
 
 def get_tensor_transforms():
     transforms = A.Compose([
         ToTensorV2(p=1.0)
-    ])
+    ], additional_targets={'target': 'mask'})
 
     return transforms

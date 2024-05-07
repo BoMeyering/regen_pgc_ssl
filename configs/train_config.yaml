@@ -4,10 +4,11 @@ general:
 hardware:
   device: 'cuda'
 directories:
-  train_dir: 
-  val_dir:
-  test_dir:
-  output_dir:
+  train_l_dir: 'data/dev_data/labeled/train'
+  train_u_dir: 'data/dev_data/unlabeled/train'
+  val_dir: 'data/dev_data/labeled/val'
+  test_dir: 'data/dev_data/labeled/test'
+  output_dir: 'outputs'
   chkpt_dir:
 model:
   model_name: deeplabv3
@@ -20,6 +21,8 @@ model:
   encoder_name: resnet18
   encoder_weights: imagenet
   encoder_depth: 5
+  lab_bs: 2
+  unlab_bs: 4
 optimizer:
   optim_name: sgd
   lr: 0.001

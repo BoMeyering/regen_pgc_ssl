@@ -11,6 +11,8 @@ from src.utils.config import YamlConfigLoader, ArgsAttributeSetter
 from src.utils.parameters import get_params
 from src.models import create_smp_model
 from src.optim import EMA, get_optimizer
+from src.data import LabeledDataset, UnlabeledDataset
+from src.transforms import get_train_transforms
 
 
 parser = ArgumentParser()
@@ -44,9 +46,34 @@ def main(args):
         ema = EMA(model, args.model.ema_decay)
 
     # Build Datasets and Dataloaders
+    train_l_ds = LabeledDataset(root_dir=args.directories.train_l_dir)
+    train_u_ds = UnlabeledDataset(root_dir=args.directories.train_u_dir)
+    val_ds = LabeledDataset(root_dir=args.directories.val_dir)
+    test_ds = LabeledDataset(root_dir=args.directories.test_dir)
 
-    return args
+    
+
+
+    
+    return train_l_ds, train_u_ds, val_ds, test_ds
 
 
 if __name__ == '__main__':
-    configs = main(args)
+    train_l_ds, train_u_ds, val_ds, test_ds = main(args)
+
+    print(len(train_l_ds), len(train_u_ds), len(val_ds), len(test_ds))
+    img, target = train_l_ds[0]
+    print(img)
+    print(target)
+
+    weak_img, strong_img = train_u_ds[0]
+    print(weak_img)
+    print(strong_img)
+
+    img, target = val_ds[0]
+    print(img)
+    print(target)
+
+    img, target = test_ds[0]
+    print(img)
+    print(target)

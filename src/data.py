@@ -1,16 +1,21 @@
 import torch
 import cv2
 import os
+import random
+import argparse
 import numpy as np
 import albumentations as A
 from PIL import Image
 from scipy.io import loadmat
-from torch.utils.data import Dataset
-from typing import Union, Any
+import torch.utils
+from torch.utils.data import Dataset, Sampler
+from typing import Union, Any, Tuple
 from pathlib import Path
 from glob import glob
 
-from src.transforms import get_tensor_transforms
+import torch.utils.data
+
+from src.transforms import get_tensor_transforms, get_train_transforms, get_val_transforms, get_strong_transforms, get_weak_transforms
 from logging import getLogger
 
 
@@ -53,9 +58,9 @@ class StatDataset(Dataset):
         return len(self.image_keys)
     
 class LabeledDataset(Dataset):
-    def __init__(self, img_dir: Union[Path, str], target_dir: Union[Path, str], transforms: A.Compose):
-        self.img_dir = img_dir
-        self.target_dir = target_dir
+    def __init__(self, root_dir: Union[Path, str], transforms: A.Compose=get_train_transforms()):
+        self.img_dir = Path(root_dir) / "images"
+        self.target_dir = Path(root_dir) / "targets"
         self.transforms = transforms
 
         if not os.path.exists(self.img_dir):
@@ -68,25 +73,90 @@ class LabeledDataset(Dataset):
 
         if len(self.img_keys) != len(self.target_keys):
             raise ValueError(f"Image keys and target keys are different lengths. Please ensure that each training image in {self.img_dir} has a corresponding target mask in {self.target_dir}")
-        elif set(self.img_keys.replace('.jpg', '')) != set(self.target_keys.replace('.png', '')):
+        elif len(self.img_keys) == 0 | len(self.target_keys) == 0:
+            raise FileExistsError(f"Image and target directories are empty. Please ensure that the right directories were passed in the configuration file.")
+        
+        elif set([i.replace('.jpg', '') for i in self.img_keys]) != set([i.replace('.png', '') for i in self.target_keys]):
             raise ValueError(f"Base names for 'img_keys' and 'target_keys' do not match. Please ensure that each image in {self.img_dir} has a corresponding target mask in {self.target_dir} with the same base name.")
 
-        
-        
-
-        
     def __getitem__(self, index) -> Any:
 
+        # grab data keys
         img_key = self.img_keys[index]
-        target_key = 
+        target_key = self.target_keys[index]
 
+        # Paths for images and target
+        img_path = Path(self.img_dir) / img_key
+        target_path = Path(self.target_dir) / target_key
 
+        # read in images and targets
+        img = cv2.imread(str(img_path))
+        target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)
 
+        # transform images and targets
+        transformed = self.transforms(image=img, target=target)
+        img, target = transformed['image'], transformed['target']
 
         return img, target
     
-
     def __len__(self):
 
-        return len(self.img)
+        return len(self.img_keys)
+
+class UnlabeledDataset(Dataset):
+    def __init__(self, root_dir: Union[Path, str], weak_transforms: A.Compose=get_weak_transforms(), strong_transforms=get_strong_transforms()):
+        self.img_dir = Path(root_dir) / "images"
+        self.weak_transforms = weak_transforms
+        self.strong_transforms = strong_transforms
+
+        if not os.path.exists(self.img_dir):
+            raise NotADirectoryError(f'Path to img_dir {self.img_dir} does not exist. Please check path integrity.')
+
+        self.img_keys = sorted([img for img in glob('*', root_dir = self.img_dir) if img.endswith(('jpg'))])
+
+    def __getitem__(self, index) -> Any:
+
+        # grab data keys
+        img_key = self.img_keys[index]
+
+        # Paths for images and target
+        img_path = Path(self.img_dir) / img_key
+
+        # read in images and targets
+        img = cv2.imread(str(img_path))
+
+        # transform images and targets
+        weak_img = self.weak_transforms(image=img)['image']
+        weak_array = np.moveaxis(weak_img.cpu().numpy(), source=0, destination=2)
+        strong_img = self.strong_transforms(image=weak_array)['image']
+
+        return weak_img, strong_img
     
+    def __len__(self):
+
+        return len(self.img_keys)
+    
+
+class InfiniteSampler(Sampler):
+    def __init__(self, dataset: torch.utils.data.Dataset):
+        self.dataset = dataset
+
+    def __iter__(self):
+        while True:
+            yield from torch.randperm(len(self.dataset))
+
+    def __len____(self):
+        return len(self.dataset)
+
+class InfiniteSampler2(Sampler):
+    def __init__(self, dataset: torch.utils.data.Dataset):
+        self.indices = list(range(len(dataset)))
+        self.dataset = dataset
+
+    def __iter__(self):
+        random.shuffle(self.indices)
+        for i in self.indices:
+            yield i % len(self.indices)
+
+    def __len__(self):
+        return len(self.dataset)
