@@ -18,7 +18,7 @@ root_directory = os.path.dirname(script_directory)
 sys.path.append(root_directory)
 
 from src.utils.config import YamlConfigLoader, ArgsAttributeSetter
-from src.data import StatDataset
+from src.datasets import StatDataset
 from src.utils.welford import WelfordCalculator
 
 logger = Logger('norm_calc_logger', level='DEBUG')

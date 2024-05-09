@@ -135,28 +135,3 @@ class UnlabeledDataset(Dataset):
     def __len__(self):
 
         return len(self.img_keys)
-    
-
-class InfiniteSampler(Sampler):
-    def __init__(self, dataset: torch.utils.data.Dataset):
-        self.dataset = dataset
-
-    def __iter__(self):
-        while True:
-            yield from torch.randperm(len(self.dataset))
-
-    def __len____(self):
-        return len(self.dataset)
-
-class InfiniteSampler2(Sampler):
-    def __init__(self, dataset: torch.utils.data.Dataset):
-        self.indices = list(range(len(dataset)))
-        self.dataset = dataset
-
-    def __iter__(self):
-        random.shuffle(self.indices)
-        for i in self.indices:
-            yield i % len(self.indices)
-
-    def __len__(self):
-        return len(self.dataset)

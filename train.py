@@ -11,8 +11,9 @@ from src.utils.config import YamlConfigLoader, ArgsAttributeSetter
 from src.utils.parameters import get_params
 from src.models import create_smp_model
 from src.optim import EMA, get_optimizer
-from src.data import LabeledDataset, UnlabeledDataset
+from src.datasets import LabeledDataset, UnlabeledDataset
 from src.transforms import get_train_transforms
+from src.dataloaders import DataLoaderBalancer
 
 
 parser = ArgumentParser()
@@ -51,29 +52,17 @@ def main(args):
     val_ds = LabeledDataset(root_dir=args.directories.val_dir)
     test_ds = LabeledDataset(root_dir=args.directories.test_dir)
 
-    
-
-
-    
+    dl_balancer = DataLoaderBalancer(train_l_ds, train_u_ds, val_ds, test_ds, batch_sizes=[2, 3, 12, 4], drop_last=False)
+    dataloaders, max_length = dl_balancer.balance_loaders()
+    dataloaders = [iter(dl) for dl in dataloaders]
+    for batch_idx in range(max_length):
+        print(batch_idx)
+        batches = tuple(next(dl) for dl in dataloaders)
+        for b in batches:
+            print(type(b))
+            print(b)
     return train_l_ds, train_u_ds, val_ds, test_ds
 
 
 if __name__ == '__main__':
     train_l_ds, train_u_ds, val_ds, test_ds = main(args)
-
-    print(len(train_l_ds), len(train_u_ds), len(val_ds), len(test_ds))
-    img, target = train_l_ds[0]
-    print(img)
-    print(target)
-
-    weak_img, strong_img = train_u_ds[0]
-    print(weak_img)
-    print(strong_img)
-
-    img, target = val_ds[0]
-    print(img)
-    print(target)
-
-    img, target = test_ds[0]
-    print(img)
-    print(target)

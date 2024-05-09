@@ -12,22 +12,37 @@ directories:
   chkpt_dir:
 model:
   model_name: deeplabv3
-  weight_decay: 1e-5
-  filter_bias_and_bn: True
-  ema: True # Exponential moving average of model parameters
-  ema_decay: 0.999
   num_classes: 10
   in_channels: 3
   encoder_name: resnet18
   encoder_weights: imagenet
   encoder_depth: 5
-  lab_bs: 2
+  lab_bs: 6
   unlab_bs: 4
 optimizer:
-  optim_name: sgd
+  name: SGD
+  weight_decay: 0.00001
+  filter_bias_and_bn: True
+  ema: True # Exponential moving average of model parameters
+  ema_decay: 0.999
   lr: 0.001
   momentum: 0.99
   beta1:
   beta2:
   nesterov: True
+loss:
+  name: JaccardLoss
+  mode: multiclass # binary or multiclass
+  ignore_index: 
+  smooth: 
+  alpha: 0.5
+  beta: 0.5
+  gamma: 2
+  eps: 
+  per_image: False
+fixmatch:
+  tau: [.85]
+  # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
+  lam: 0.2 # Scaling factor for loss function
+
 

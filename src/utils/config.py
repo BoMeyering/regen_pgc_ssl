@@ -31,7 +31,7 @@ class YamlConfigLoader:
         with open(self.path, 'r') as file:
             return yaml.safe_load(file)
         
-class ArgsAttributeSetter:
+class ArgsAttributes:
     def __init__(self, args: argparse.Namespace, config: dict) -> None:
         if not isinstance(args, argparse.Namespace):
             raise TypeError(f"'args' should be an argparse.Namespace object.")
@@ -66,4 +66,5 @@ class ArgsAttributeSetter:
         if check_run_name:
             self.append_timestamp_to_run()
 
-        return self.args
+    def validate(self):
+        pass

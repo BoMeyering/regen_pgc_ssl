@@ -1,9 +1,10 @@
 # List out all of the directories containing images used in the training scheme
 training_dirs:
-  - 'data/raw/cropandweed-dataset/data/images'
+  # - 'data/raw/cropandweed-dataset/data/images'
   - 'data/raw/grass-clover-dataset/synthetic_images/synthetic_images/Images'
   - 'data/raw/grass-clover-dataset/developed_images/developed/ATV'
   - 'data/raw/grass-clover-dataset/developed_images/developed/sony'
   - 'data/raw/grass-clover-dataset/developed_images/developed/nikon'
-  - 'data/raw/regen-pgc-view'
+  # - 'data/raw/regen-pgc-view'
+  # - 'data/raw/k1702_dataset/images'
 out_path: 'metadata/dataset_norm.json'

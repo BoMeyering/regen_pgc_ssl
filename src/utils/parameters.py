@@ -35,11 +35,15 @@ def get_params(args: argparse.Namespace, model: torch.nn.Module) -> Tuple:
         Tuple: A tuple containing the model parameters and the udpated weight decay value for the optimizer
     """
 
-    if args.model.weight_decay and args.model.filter_bias_and_bn:
-        parameters = add_weight_decay(model, args.model.weight_decay)
+    if args.optimizer.weight_decay and args.optimizer.filter_bias_and_bn:
+        print("Filtering bias and norm")
+        parameters = add_weight_decay(model, args.optimizer.weight_decay)
         weight_decay = 0
+        setattr(args.optimizer, 'original_weight_decay', args.optimizer.weight_decay)
+        setattr(args.optimizer, 'weight_decay', weight_decay)
     else:
+        print("Applying weight decay to all parameters")
         parameters = model.parameters()
-        weight_decay = args.model.weight_decay
-
-    return parameters, weight_decay
+        weight_decay = args.optimizer.weight_decay
+    
+    return parameters

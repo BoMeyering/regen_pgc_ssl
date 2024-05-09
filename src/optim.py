@@ -2,18 +2,67 @@
 # BoMeyering 2024
 
 import torch
+import inspect
 from typing import List, Generator
+import segmentation_models_pytorch as smp
 
-def get_optimizer(args, parameters: Generator, weight_decay: float=1e-5):
 
-    if args.optimizer.optim_name == 'sgd':
+
+class ConfigOptim:
+    def __init__(self, args, model_parameters):
+        self.args = args
+        self.optim_params = vars(self.args.optimizer).copy()
+        self.loss_params = vars(self.args.loss).copy()
+        self.model_params = model_parameters
+
+    def get_optimizer(self):
+        
+        try:
+            OptimClass = getattr(torch.optim, self.optim_params['name'])
+        except AttributeError:
+            print(f"The loss function {self.optim_params['name']} is not in torch.nn. Defaulting to torch.optim.SGD.")
+            OptimClass = torch.optim.SGD
+        
+        valid_params = inspect.signature(OptimClass).parameters
+        filtered_params = {k: v for k, v in self.optim_params.items() if k in valid_params}
+        optim_params = {'params': self.model_params}
+        optim_params.update(filtered_params)
+
+        optimizer = OptimClass(**optim_params)
+
+        return optimizer
+
+    def get_loss_criterion(self) -> torch.nn.Module:
+        """
+        Return an instantiated loss criterion from the config specs.
+
+        Returns:
+            torch.nn.Module: A loss criterion
+        """
+        try:
+            LossClass = getattr(smp.losses, self.loss_params.get('name'))
+        except AttributeError:
+            print(f"The loss function {self.loss_params['name']} is not in smp.losses. Defaulting to torch.nn.CrossEntropyLoss.")
+            LossClass = torch.nn.CrossEntropyLoss
+        
+        valid_params = inspect.signature(LossClass).parameters
+        filtered_params = {k: v for k, v in self.loss_params.items() if k in valid_params}
+
+        criterion = LossClass(**filtered_params)
+
+        return criterion
+
+
+def get_optimizer(args, parameters: Generator):
+
+    if args.optimizer.name == 'sgd':
         optimizer = torch.optim.SGD(
             params=parameters, 
             lr=args.optimizer.lr,
             momentum=args.optimizer.momentum,
-            weight_decay=weight_decay, 
+            # weight_decay=args.optimizer.weight_decay, 
+            weight_decay=args.optimizer.weight_decay,
             nesterov=args.optimizer.nesterov
-            #...
         )
         return optimizer
     
@@ -21,8 +70,9 @@ def get_optimizer(args, parameters: Generator, weight_decay: float=1e-5):
     # elif args.optim_name == 'adam':
     #     pass
 
+
 class EMA:
-    def __init__(self, model: torch.nn.Module, decay: float):
+    def __init__(self, model: torch.nn.Module, decay: float, verbose: bool=True):
         """
         Initialize exponential moving average of named model parameters
         Smooths the model parameters based on an exponential moving average equation:
@@ -47,6 +97,7 @@ class EMA:
         self.shadow_params = {}
         self.original_params = {}
         self.update_params()
+        self.verbose = verbose
 
     def  update_params(self):
         """
@@ -75,8 +126,10 @@ class EMA:
         """
         Update shadow parameters and apply them to the model
         """
-        self.update_parms()
-        self.apply_shadow()
+        self.update_params()
+        self.assign_params()
+        if self.verbose:
+            print("Model parameters updated with shadow params")
 
     def restore_params(self):
         """
@@ -85,3 +138,31 @@ class EMA:
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 param.data.copy_(self.original_params[name].data)
+
+# def loss_balancer(args, criterion, l_logits, ):
+#     pass
+
+# # def get
+# loss_fn = smp.losses.JaccardLoss(mode='multiclass')
+# # loss_fn = smp.losses.DiceLoss(mode='multiclass')
+# # loss_fn = smp.losses.TverskyLoss(mode='multiclass', alpha=.7)
+# # loss_fn = smp.losses.FocalLoss(mode='multiclass', alpha=.8, gamma=0.5)
+# # loss_fn = smp.losses.LovaszLoss(mode='multiclass')
+
+
+# from torch.nn.functional import cross_entropy, softmax
+
+# y_logits = torch.randn(3, 4, 10, 10)*1000
+# y_probs = softmax(y_logits, dim=1)
+# y_true = torch.argmax(y_probs, dim=1)
+# # y_max, y_true = torch.max(y_logits, dim=1)
+
+# # print(y_logits)
+# # print(y_true)
+
+# print(y_logits.shape)
+# print(y_true.shape)
+
+# loss = loss_fn(y_pred = y_logits, y_true = y_true)
+# # loss = cross_entropy(input=y_logits, target=y_true)
+# print(loss)
