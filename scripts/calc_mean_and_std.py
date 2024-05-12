@@ -17,7 +17,7 @@ script_directory = os.path.dirname(os.path.abspath(__file__))
 root_directory = os.path.dirname(script_directory)
 sys.path.append(root_directory)
 
-from src.utils.config import YamlConfigLoader, ArgsAttributeSetter
+from src.utils.config import YamlConfigLoader, ArgsAttributes
 from src.datasets import StatDataset
 from src.utils.welford import WelfordCalculator
 
@@ -42,7 +42,11 @@ args = parser.parse_args()
 if not os.path.exists(args.config):
     raise FileNotFoundError(f"Path to config file {args.config} does not exist. Please specify a different path")
 config = YamlConfigLoader(args.config).load_config()
-args = ArgsAttributeSetter(args, config).set_args_attr(check_run_name=False)
+arg_attr = ArgsAttributes(args, config)
+arg_attr.set_args_attr(check_run_name=False)
+args = arg_attr.args
+
+print(args)
 
 # Set device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'

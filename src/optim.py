@@ -138,31 +138,3 @@ class EMA:
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 param.data.copy_(self.original_params[name].data)
-
-# def loss_balancer(args, criterion, l_logits, ):
-#     pass
-
-# # def get
-# loss_fn = smp.losses.JaccardLoss(mode='multiclass')
-# # loss_fn = smp.losses.DiceLoss(mode='multiclass')
-# # loss_fn = smp.losses.TverskyLoss(mode='multiclass', alpha=.7)
-# # loss_fn = smp.losses.FocalLoss(mode='multiclass', alpha=.8, gamma=0.5)
-# # loss_fn = smp.losses.LovaszLoss(mode='multiclass')
-
-
-# from torch.nn.functional import cross_entropy, softmax
-
-# y_logits = torch.randn(3, 4, 10, 10)*1000
-# y_probs = softmax(y_logits, dim=1)
-# y_true = torch.argmax(y_probs, dim=1)
-# # y_max, y_true = torch.max(y_logits, dim=1)
-
-# # print(y_logits)
-# # print(y_true)
-
-# print(y_logits.shape)
-# print(y_true.shape)
-
-# loss = loss_fn(y_pred = y_logits, y_true = y_true)
-# # loss = cross_entropy(input=y_logits, target=y_true)
-# print(loss)

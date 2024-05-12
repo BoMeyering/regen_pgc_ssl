@@ -1,8 +1,6 @@
 # Training configs
-general:
-  run_name: model_run_name
-hardware:
-  device: 'cuda'
+run_name: model_run_name
+device: 'cpu'
 directories:
   train_l_dir: 'data/dev_data/labeled/train'
   train_u_dir: 'data/dev_data/unlabeled/train'
@@ -12,13 +10,15 @@ directories:
   chkpt_dir:
 model:
   model_name: deeplabv3
-  num_classes: 10
+  num_classes: 2
   in_channels: 3
   encoder_name: resnet18
   encoder_weights: imagenet
   encoder_depth: 5
-  lab_bs: 6
-  unlab_bs: 4
+  lab_bs: 2
+  unlab_bs: 2
+  resize: [1000, 1000]
+  epochs: 10
 optimizer:
   name: SGD
   weight_decay: 0.00001
@@ -31,14 +31,14 @@ optimizer:
   beta2:
   nesterov: True
 loss:
-  name: JaccardLoss
+  name: DiceLoss
   mode: multiclass # binary or multiclass
-  ignore_index: 
-  smooth: 
+  ignore_index: -1
+  smooth: 0.0
   alpha: 0.5
   beta: 0.5
   gamma: 2
-  eps: 
+  eps: 0.0000001
   per_image: False
 fixmatch:
   tau: [.85]

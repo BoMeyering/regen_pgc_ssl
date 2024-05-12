@@ -1,9 +1,10 @@
 {
-    "soil": 0,
-    "residue": 1,
-    "pgc_grass": 2,
-    "pgc_clover": 3,
-    "broadleaf_weed": 4,
-    "maize": 5,
-    "soybean": 6
+    "background": 0, // soil, residue, rocks, any other 0 mask
+    "quadrat": 1, // quadrat
+    "pgc_grass": 2, // all grass species
+    "pgc_clover": 3, // all clover masks
+    "broadleaf_weed": 4, // all broadleaf weed masks
+    "maize": 5, // all corn
+    "soybean": 6, // all soybean masks
+    "other_vegetation": 7 // any other crop classes?
 }
