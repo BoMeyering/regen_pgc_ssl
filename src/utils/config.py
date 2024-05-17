@@ -5,6 +5,8 @@ import yaml
 import os
 import pathlib
 import argparse
+import sys
+import logging
 from pathlib import Path
 from typing import Union
 from datetime import datetime
@@ -43,14 +45,14 @@ class ArgsAttributes:
     def append_timestamp_to_run(self):
         now = datetime.now().isoformat(timespec='seconds', sep='_')
         try:
-            if hasattr(self.args.general, 'run_name'):
-                self.args.general.run_name = "_".join((self.args.general.run_name, now))
-            elif hasattr(self.args, 'general'):
-                self.args.general.run_name = "_".join(('default_run', now))
+            if hasattr(self.args, 'run_name'):
+                self.args.run_name = "_".join((self.args.run_name, now))
+            else:
+                self.args.run_name = "_".join(('default_run', now))
         except AttributeError as e:
             print(e)
             print(f"Setting default run_name to 'default_run_{now}'")
-            self.args.general = argparse.Namespace(**{'run_name': "_".join(('default_run', now))})
+            setattr(self.args, 'run_name', "_".join(('default_run', now)))
 
     def set_args_attr(self, check_run_name=True) -> argparse.Namespace:
         """Takes a parsed yaml config file as a dict and adds the arguments to the args namespace.
@@ -68,3 +70,24 @@ class ArgsAttributes:
 
     def validate(self):
         pass
+
+def setup_loggers(args):
+    """
+    Configures a simple logger to log outputs to the console and the output file.
+
+    Args:
+        args (argparse.Namespace): arguments object from the configuration file.
+    """
+    filename = args.run_name + datetime.now().isoformat(timespec='seconds', sep='_') + '.log'
+    filepath = Path(args.directories.log_dir) / filename
+
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler = logging.handlers.RotatingFileHandler(filepath, 'a', 1000000, 3)
+    stream_handler = logging.StreamHandler(sys.stdout,)
+    file_handler.setFormatter(formatter)
+    stream_handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
+    root_logger.setLevel(logging.DEBUG)

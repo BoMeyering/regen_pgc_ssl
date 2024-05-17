@@ -39,11 +39,20 @@ class ConfigOptim:
         Returns:
             torch.nn.Module: A loss criterion
         """
-        try:
-            LossClass = getattr(smp.losses, self.loss_params.get('name'))
-        except AttributeError:
-            print(f"The loss function {self.loss_params['name']} is not in smp.losses. Defaulting to torch.nn.CrossEntropyLoss.")
-            LossClass = torch.nn.CrossEntropyLoss
+        loss_name = self.loss_params.get('name')
+        if loss_name:
+            try:
+                LossClass = getattr(smp.losses, loss_name)
+            except AttributeError:
+                print(f"The loss function {loss_name} is not in smp.losses. Defaulting to torch.nn.CrossEntropyLoss.")
+                LossClass = torch.nn.CrossEntropyLoss
+        
+        if loss_name == 'CBLoss':
+            LossClass = CBLoss
+        elif loss_name == 'RecallLoss':
+            LossClass = RecallLoss
+        elif loss_name == 'ACWLoss':
+            LossClass = ACWLoss
         
         valid_params = inspect.signature(LossClass).parameters
         filtered_params = {k: v for k, v in self.loss_params.items() if k in valid_params}
@@ -138,3 +147,4 @@ class EMA:
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 param.data.copy_(self.original_params[name].data)
+

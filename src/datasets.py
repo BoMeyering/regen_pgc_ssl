@@ -48,7 +48,7 @@ class StatDataset(Dataset):
         else:
             img = cv2.imread(str(self.dir_path / self.image_keys[index]), cv2.IMREAD_COLOR)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = img.astype('float32') / 255.0  # Normalize the image to [0, 1]
+            # img = img.astype('float32') / 255.0  # Normalize the image to [0, 1]
             img = self.transforms(image=img)['image']
 
             key = self.image_keys[index]
@@ -57,10 +57,34 @@ class StatDataset(Dataset):
     def __len__(self):
         return len(self.image_keys)
     
+class LabelDataset(Dataset):
+    """
+    Barebones dataset implemented to iterate through all binary targets in a single directory
+    """
+    def __init__(self, dir_path: Union[str, Path]):
+
+        self.dir_path = Path(dir_path)
+        self.image_keys = sorted([img for img in glob('*', root_dir = self.dir_path) if img.endswith(('png'))])
+        self.transforms = get_tensor_transforms()
+
+    def __getitem__(self, index) -> np.ndarray:
+        key = self.image_keys[index]
+        try: 
+            img = cv2.imread(str(self.dir_path / self.image_keys[index]), cv2.IMREAD_GRAYSCALE)
+            img = self.transforms(image=img)['image']
+            key = self.image_keys[index]
+            return img, key 
+        except Exception as e:
+            print(e)
+            return torch.tensor(1), key
+    
+    def __len__(self):
+        return len(self.image_keys)
+    
 class LabeledDataset(Dataset):
     def __init__(self, root_dir: Union[Path, str], transforms: A.Compose=get_train_transforms()):
         self.img_dir = Path(root_dir) / "images"
-        self.target_dir = Path(root_dir) / "targets"
+        self.target_dir = Path(root_dir) / "labels"
         self.transforms = transforms
 
         if not os.path.exists(self.img_dir):
@@ -90,9 +114,11 @@ class LabeledDataset(Dataset):
         target_path = Path(self.target_dir) / target_key
 
         # read in images and targets
-        img = cv2.imread(str(img_path))
+        # img = cv2.imread(str(img_path))
         # target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)
+
         # added for dev data
+        img = cv2.imread(str(img_path))
         target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)//50
 
         # transform images and targets
