@@ -4,6 +4,7 @@ import os
 import torch
 import yaml
 import sys
+import json
 import logging.config
 import datetime
 
@@ -11,6 +12,8 @@ from torch.utils.data import DataLoader
 from argparse import ArgumentParser
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
+
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 from src.utils.config import YamlConfigLoader, ArgsAttributes, setup_loggers
 
@@ -22,6 +25,7 @@ from src.transforms import get_train_transforms
 from src.dataloaders import DataLoaderBalancer
 from src.fixmatch import get_pseudo_labels
 from src.trainer import FixMatchTrainer
+from src.losses import CELoss, FocalLoss, CBLoss, ACBLoss, RecallLoss
 
 # Parse the command line argument configs
 parser = ArgumentParser()
@@ -66,9 +70,20 @@ def main(args):
     # optimizer = get_optimizer(args, parameters)
     logger.info(f"Initialized optimizer {args.optimizer.name}")
 
-    opt_stuff = ConfigOptim(args, parameters)
 
-    loss_criterion = opt_stuff.get_loss_criterion()
+    # Optimizer stuff, loss criterion, and sample counts
+    opt_stuff = ConfigOptim(args, parameters)
+    with open('metadata/class_pixel_counts.json', 'r') as f:
+        samples = json.load(f)
+    samples = torch.tensor([v for v in samples.values()]).to(args.device)
+    # loss_criterion = opt_stuff.get_loss_criterion()
+    inv_weights = 1/samples
+    # loss_criterion = CELoss(weights=inv_weights)
+    # loss_criterion = FocalLoss(alpha = samples)
+    # loss_criterion = CBLoss(samples = samples, loss_type='CELoss', reduction='mean')
+    loss_criterion = RecallLoss(samples = samples, loss_type='CELoss')
+
+
     optimizer = opt_stuff.get_optimizer()
     logger.info(f"Initialized loss criterion {args.loss.name}")
     logger.info(f"Initialized optimizer {args.optimizer.name}")

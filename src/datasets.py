@@ -103,6 +103,8 @@ class LabeledDataset(Dataset):
         elif set([i.replace('.jpg', '') for i in self.img_keys]) != set([i.replace('.png', '') for i in self.target_keys]):
             raise ValueError(f"Base names for 'img_keys' and 'target_keys' do not match. Please ensure that each image in {self.img_dir} has a corresponding target mask in {self.target_dir} with the same base name.")
 
+        print("LabeledDataset initialized")
+
     def __getitem__(self, index) -> Any:
 
         # grab data keys
@@ -114,12 +116,12 @@ class LabeledDataset(Dataset):
         target_path = Path(self.target_dir) / target_key
 
         # read in images and targets
-        # img = cv2.imread(str(img_path))
-        # target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)
+        img = cv2.imread(str(img_path))
+        target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)
 
         # added for dev data
-        img = cv2.imread(str(img_path))
-        target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)//50
+        # img = cv2.imread(str(img_path))
+        # target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)//50
 
         # transform images and targets
         transformed = self.transforms(image=img, target=target)
@@ -141,6 +143,8 @@ class UnlabeledDataset(Dataset):
             raise NotADirectoryError(f'Path to img_dir {self.img_dir} does not exist. Please check path integrity.')
 
         self.img_keys = sorted([img for img in glob('*', root_dir = self.img_dir) if img.endswith(('jpg'))])
+
+        print("UnlabeledDataset initialized")
 
     def __getitem__(self, index) -> Any:
 

@@ -26,7 +26,7 @@ logger = logging.getLogger('norm_calc_logger')
 logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
 
-file_handler = logging.FileHandler('logs/norm_calc_log'+datetime.datetime.now().isoformat(timespec='seconds', sep="_"))
+file_handler = logging.FileHandler('logs/norm_calc_log'+datetime.datetime.now().isoformat(timespec='seconds', sep="_")+'.log')
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(formatter)
 

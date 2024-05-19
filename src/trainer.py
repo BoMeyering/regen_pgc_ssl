@@ -86,32 +86,25 @@ class FixMatchTrainer(Trainer):
         l_logits = logits[:len(l_img)]
         weak_logits, strong_logits = logits[len(l_img): ].chunk(2) # grab the unlabeled logits and split into two
 
-        # labeled loss
+        # Calculate labeled loss
         l_loss = self.criterion(l_logits, l_targets)
-        # l_loss = F.cross_entropy(l_logits, l_targets, reduction='mean')
 
-        # pseudo-labeling data
+        # Pseudo-label the unlabled images
         u_targets, mask = get_pseudo_labels(self.args, weak_logits)
 
-        # print(u_targets)
-        # print(mask)
-
-
-        u_targets = mask_targets(u_targets, mask, ignore_index=self.args.loss.ignore_index)
+        # Calculate unlabeled loss
         u_loss = self.criterion(strong_logits, u_targets)
-
-
-        print(u_targets)
-        print(mask)
         
-        # u_loss = F.cross_entropy(strong_logits, u_targets, reduction='mean')
-
-        total_loss = l_loss + self.args.fixmatch.lam * u_loss
-        
-        # Update loss meters
-        self.meters.update("total_loss", total_loss.item(), 1)
-        self.meters.update("labeled_loss", l_loss.item(), l_logits.size()[0])
-        self.meters.update("unlabeled_loss", u_loss.item(), strong_logits.size()[0])
+        if torch.isnan(u_loss):
+            total_loss = l_loss
+            self.meters.update("total_loss", total_loss.item(), 1)
+            self.meters.update("labeled_loss", l_loss.item(), l_logits.size()[0])
+        else:
+            total_loss = l_loss + self.args.fixmatch.lam * u_loss
+            # Update loss meters
+            self.meters.update("total_loss", total_loss.item(), 1)
+            self.meters.update("labeled_loss", l_loss.item(), l_logits.size()[0])
+            self.meters.update("unlabeled_loss", u_loss.item(), strong_logits.size()[0])
 
         # Update metrics
         self.metrics.update(preds=l_logits, targets=l_targets)
@@ -145,14 +138,16 @@ class FixMatchTrainer(Trainer):
             loss = self._train_step(batches)
             loss.backward()
 
-            # print metrics
             if batch_idx % 20 == 0:
-                self.metrics.print_metrics(type='both')
+                # self.metrics.print_metrics(type='both')
+                avg_metrics, mc_metrics = self.metrics.compute()
+                print('\n', avg_metrics, '\n', mc_metrics, '\n')
 
             # Update parameters
             self.optimizer.step()
-            # if self.ema:
-            #     self.ema.update()
+            if self.ema:
+                print(True)
+                self.ema.update()
 
             p_bar.set_description(
                 "Train Epoch: {epoch}/{epochs:4}. Iter: {batch:4}/{iter:4}. LR: {lr:.6f}. Loss: {loss:.6f}".format(
