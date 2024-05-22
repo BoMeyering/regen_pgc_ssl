@@ -5,6 +5,7 @@ import torch
 import os
 import sys
 import json
+import pandas as pd
 from glob import glob
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -65,22 +66,32 @@ def main():
 
     iter_loader = iter(label_dl)
 
+    img_keys = []
+    pixel_array = []
     meters = ClassMeters()
     for _ in tqdm(range(len(dataset))):
         img, key = next(iter_loader)
         
+        pixel_list = [0, 0, 0, 0, 0, 0, 0, 0]
         unique_labels = torch.unique(img)
         for i in unique_labels:
             i = i.item()
             meters.update_img(idx=i)
             pixels = (img == i).sum().item()
             meters.update_px(idx=i, pixels=pixels)
+            pixel_list[i] = pixels
         # meters.display()
+        pixel_array.append(pixel_list)
+        img_keys.append(key)
     with open('metadata/class_img_counts.json', 'w') as f:
         json.dump(meters.img_meters, f)
     with open('metadata/class_pixel_counts.json', 'w') as f:
         json.dump(meters.pixel_meters, f)
     
+    pixel_dist_df = pd.DataFrame(pixel_array)
+    pixel_dist_df['keys'] = img_keys
+
+    pixel_dist_df.to_csv('metadata/img_pixel_distributions.csv')
         
 
 

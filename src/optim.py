@@ -3,82 +3,54 @@
 
 import torch
 import inspect
+import argparse
 from typing import List, Generator
 import segmentation_models_pytorch as smp
-
-
 
 class ConfigOptim:
     def __init__(self, args, model_parameters):
         self.args = args
         self.optim_params = vars(self.args.optimizer).copy()
         self.loss_params = vars(self.args.loss).copy()
+        self.scheduler_params = vars(self.args.scheduler).copy()
         self.model_params = model_parameters
 
     def get_optimizer(self):
-        
-        try:
-            OptimClass = getattr(torch.optim, self.optim_params['name'])
-        except AttributeError:
-            print(f"The loss function {self.optim_params['name']} is not in torch.nn. Defaulting to torch.optim.SGD.")
-            OptimClass = torch.optim.SGD
-        
-        valid_params = inspect.signature(OptimClass).parameters
-        filtered_params = {k: v for k, v in self.optim_params.items() if k in valid_params}
-        optim_params = {'params': self.model_params}
-        optim_params.update(filtered_params)
-
-        optimizer = OptimClass(**optim_params)
-
-        return optimizer
-
-    def get_loss_criterion(self) -> torch.nn.Module:
-        """
-        Return an instantiated loss criterion from the config specs.
-
-        Returns:
-            torch.nn.Module: A loss criterion
-        """
-        loss_name = self.loss_params.get('name')
-        if loss_name:
+            
             try:
-                LossClass = getattr(smp.losses, loss_name)
+                OptimClass = getattr(torch.optim, self.optim_params['name'])
             except AttributeError:
-                print(f"The loss function {loss_name} is not in smp.losses. Defaulting to torch.nn.CrossEntropyLoss.")
-                LossClass = torch.nn.CrossEntropyLoss
-        
-        if loss_name == 'CBLoss':
-            LossClass = CBLoss
-        elif loss_name == 'RecallLoss':
-            LossClass = RecallLoss
-        elif loss_name == 'ACWLoss':
-            LossClass = ACWLoss
-        
-        valid_params = inspect.signature(LossClass).parameters
-        filtered_params = {k: v for k, v in self.loss_params.items() if k in valid_params}
+                print(f"The loss function {self.optim_params['name']} is not in torch.nn. Defaulting to torch.optim.SGD.")
+                OptimClass = torch.optim.SGD
+            
+            valid_params = inspect.signature(OptimClass).parameters
+            filtered_params = {k: v for k, v in self.optim_params.items() if k in valid_params}
+            optim_params = {'params': self.model_params}
+            optim_params.update(filtered_params)
 
-        criterion = LossClass(**filtered_params)
+            optimizer = OptimClass(**optim_params)
+            self.optimizer = optimizer
 
-        return criterion
+            return self.optimizer
 
+    def get_scheduler(self):
 
-def get_optimizer(args, parameters: Generator):
+        if self.args.scheduler.name:
+            try:
+                SchedClass = getattr(torch.optim.lr_scheduler, self.args.scheduler.name)
+            except AttributeError:
+                print(f"The scheduler {self.args.scheduler.name} is not in torch.optim.lr_scheduler. Defaulting to torch.optim..")
+                SchedClass = torch.optim.lr_scheduler.LinearLR
 
-    if args.optimizer.name == 'sgd':
-        optimizer = torch.optim.SGD(
-            params=parameters, 
-            lr=args.optimizer.lr,
-            momentum=args.optimizer.momentum,
-            # weight_decay=args.optimizer.weight_decay, 
-            weight_decay=args.optimizer.weight_decay,
-            nesterov=args.optimizer.nesterov
-        )
-        return optimizer
-    
-    # REPEAT FOR OTHER TYPES
-    # elif args.optim_name == 'adam':
-    #     pass
+        valid_params = inspect.signature(SchedClass).parameters
+        filtered_params = {k: v for k, v in self.scheduler_params.items() if k in valid_params}
+        scheduler_params = {'optimizer': self.optimizer}
+        scheduler_params.update(filtered_params)
+        scheduler = SchedClass(**scheduler_params)
 
+        self.scheduler = scheduler
+
+        return self.scheduler
 
 class EMA:
     def __init__(self, model: torch.nn.Module, decay: float, verbose: bool=True):

@@ -2,19 +2,56 @@
 # BoMeyering 2024
 
 import torch
+import src
+import logging
+import inspect
+import argparse
 import torch.nn.functional as F
 from typing import Union, Optional
+
+logger = logging.getLogger()
+
+def get_loss_criterion(args: argparse.Namespace) -> torch.nn.Module:
+    """
+    Get a loss function from the args
+
+    Args:
+        args (argparse.Namespace): Arguments namespace from a configuration file.
+
+    Returns:
+        torch.nn.Module: An instantiated loss criterion.
+    """
+
+    # Set loss name and retrieve the class from src.losses namespace
+    loss_name = args.loss.name
+    LossClass = getattr(src.losses, loss_name)
+
+    # Get the valid parameters
+    loss_params = vars(args.loss).copy()
+    valid_params = inspect.signature(LossClass).parameters
+    filtered_params = {k: v for k, v in loss_params.items() if k in valid_params}
+
+    # Instnatiate the criterion
+    criterion = LossClass(**filtered_params)
+    
+    return criterion
 
 class CELoss(torch.nn.Module):
     """
     Wrapper class for vanilla cross entropy loss.
     """
-    def __init__(self, ignore_index=-1, label_smoothing: float=0.0, weights: Optional[torch.tensor]=None, reduction: str='mean'):
+    def __init__(self, ignore_index=-1, label_smoothing: float=0.0, weights: Optional[torch.tensor]=None, reduction: str='mean', use_weights: bool=True):
         super().__init__()
         self.ignore_index = ignore_index
         self.label_smoothing = label_smoothing
         self.weights = weights
         self.reduction = reduction
+        self.use_weights = use_weights
+
+        if self.use_weights:
+            logger.info("Using inverse weights for CELoss.")
+        else:
+            logger.info("Not using inverse weights for CELoss.")
     
     def _mask_targets(targets: torch.Tensor, mask: torch.BoolTensor, ignore_index: int=-1) -> torch.tensor:
         """
@@ -46,15 +83,23 @@ class CELoss(torch.nn.Module):
         """
         if mask is not None:
             targets = self._mask_targets(targets, mask, self.ignore_index)
-
-        loss = F.cross_entropy(
-            input=preds, 
-            target=targets, 
-            ignore_index=self.ignore_index, 
-            label_smoothing=self.label_smoothing, 
-            reduction=self.reduction, 
-            weight=self.weights
-        )
+        if self.use_weights:
+            loss = F.cross_entropy(
+                input=preds, 
+                target=targets, 
+                ignore_index=self.ignore_index, 
+                label_smoothing=self.label_smoothing, 
+                reduction=self.reduction, 
+                weight=self.weights
+            )
+        else:
+            loss = F.cross_entropy(
+                input=preds, 
+                target=targets, 
+                ignore_index=self.ignore_index, 
+                label_smoothing=self.label_smoothing, 
+                reduction=self.reduction
+            )
 
         return loss
 
@@ -118,23 +163,34 @@ class CBLoss(torch.nn.Module):
     """
     def __init__(self, samples: torch.tensor, loss_type: str, reduction: str='mean', gamma: Optional[float]=2.0):
         super().__init__()
-        self.samples = samples
+        self.samples = samples.double()
         self.loss_type = loss_type
         self.reduction = reduction
         self.gamma = gamma
         self.N = self.samples.sum()
         self.beta = (self.N - 1) / self.N
         self.C = len(self.samples)
+        self.eps = 1e-7
+
+        self._effective_samples()
+        if self.loss_type == 'CELoss':
+            self.loss_fn = CELoss(weights=self.alpha.float(), reduction=self.reduction)
+        elif self.loss_type == 'FocalLoss':
+            self.loss_fn = FocalLoss(alpha=self.alpha, gamma=self.gamma, reduction=self.reduction)
+        else:
+            raise ValueError(f"Invalid loss type: {self.loss_type}. Must be one of ['CELoss', 'FocalLoss']")
 
     def _effective_samples(self):
         """
         Helper function to calculate the effective samples and weights.
         """
         # Calculate effective samples
-        E = (1 - (self.beta ** self.samples))/(1 - self.beta)
+        E = (1 - torch.pow(self.beta, self.samples)).double() / (1 - self.beta + self.eps).double()
+        # E = torch.clamp(E, min=self.eps, max=1e10)
 
         # Invert to get alpha weights and normalize
         alpha = 1/E * self.C / (1/E).sum()
+        # alpha = torch.clamp(alpha, min=self.eps, max=1e10)
 
         self.E = E
         self.alpha = alpha
@@ -151,17 +207,8 @@ class CBLoss(torch.nn.Module):
         Returns:
             torch.tensor: A scalar loss value if reduction is 'mean' or 'sum', else a loss tensor of shape (N, H, W).
         """
-        # Calculate effective samples
-        self._effective_samples()
-        
-        if self.loss_type == 'CELoss':
-            loss_fn = CELoss(weights=self.alpha, reduction=self.reduction)
-            loss = loss_fn(preds=preds, targets=targets, mask=mask)
-        elif self.loss_type == 'FocalLoss':
-            loss_fn = FocalLoss(alpha=self.alpha, gamma=self.gamma, reduction=self.reduction)
-            loss = loss_fn(preds=preds, targets=targets, mask=mask)
-        else:
-            raise ValueError(f"Invalid loss type: {self.loss_type}. Must be one of ['CELoss', 'FocalLoss']")
+
+        loss = self.loss_fn(preds=preds, targets=targets, mask=mask)
         
         return loss
   
@@ -172,27 +219,36 @@ class ACBLoss(torch.nn.Module):
     """
     def __init__(self, samples: torch.tensor, loss_type: str, reduction: str='mean', gamma: Optional[float]=2.0):
         super().__init__()
-        self.samples = samples
+        self.samples = samples.double()
         self.loss_type = loss_type
         self.reduction = reduction
         self.gamma = gamma
         self.N = self.samples.sum()
         self.N_max = torch.max(self.samples)
         self.C = len(self.samples)
+        self.eps = 1e-7
+
+        self._effective_samples()
+        if self.loss_type == 'CELoss':
+            self.loss_fn = CELoss(weights=self.alpha.float(), reduction=self.reduction)
+        elif self.loss_type == 'FocalLoss':
+            self.loss_fn = FocalLoss(alpha=self.alpha, gamma=self.gamma, reduction=self.reduction)
+        else:
+            raise ValueError(f"Invalid loss type: {self.loss_type}. Must be one of ['CELoss', 'FocalLoss']")
 
     def _effective_samples(self):
         """
         Helper function to calculate the effective samples and weights based on beta.
         """
         # Sample size, class size, and degree of imbalance calculations
-        self.u = torch.log(self.N.float())
-        self.v = torch.log(torch.tensor(self.C).float())
-        self.b = -torch.log10(self.samples / self.N_max).mean()
-        self.f_uvb = self.u / (self.v ** torch.sqrt(self.b))
-        self.beta = torch.tanh(self.f_uvb)
+        self.u = torch.log(self.N.double())
+        self.v = torch.log(torch.tensor(self.C).double())
+        self.b = -torch.log10(self.samples / self.N_max).mean().double()
+        self.f_uvb = self.u / (self.v ** torch.sqrt(self.b)).double()
+        self.beta = torch.tanh(self.f_uvb).double()
 
         # Calculate effective samples
-        E = (1 - (self.beta ** self.samples))/(1 - self.beta)
+        E = (1 - torch.pow(self.beta, self.samples)).double() / (1 - self.beta + self.eps).double()
 
         # Invert to get alpha weights and normalize
         alpha = 1/E
@@ -213,17 +269,8 @@ class ACBLoss(torch.nn.Module):
         Returns:
             torch.tensor: A scalar loss value if reduction is 'mean' or 'sum', else a loss tensor of shape (N, H, W).
         """
-        # Calculate effective samples
-        self._effective_samples()
         
-        if self.loss_type == 'CELoss':
-            loss_fn = CELoss(weights=self.alpha, reduction=self.reduction)
-            loss = loss_fn(preds=preds, targets=targets, mask=mask)
-        elif self.loss_type == 'FocalLoss':
-            loss_fn = FocalLoss(alpha=self.alpha, gamma=self.gamma, reduction=self.reduction)
-            loss = loss_fn(preds=preds, targets=targets, mask=mask)
-        else:
-            raise ValueError(f"Invalid loss type: {self.loss_type}. Must be one of ['CELoss', 'FocalLoss']")
+        loss = self.loss_fn(preds=preds, targets=targets, mask=mask)
         
         return loss
 

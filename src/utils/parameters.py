@@ -3,7 +3,10 @@
 
 import torch
 import argparse
+import logging
 from typing import List, Tuple
+
+logger = logging.getLogger() 
 
 def add_weight_decay(model: torch.nn.Module, weight_decay: float=1e-5, skip_list: List=[]):
 
@@ -36,13 +39,13 @@ def get_params(args: argparse.Namespace, model: torch.nn.Module) -> Tuple:
     """
 
     if args.optimizer.weight_decay and args.optimizer.filter_bias_and_bn:
-        print("Filtering bias and norm")
+        logger.info("Filtering bias and norm parameters from weight decay parameter.")
         parameters = add_weight_decay(model, args.optimizer.weight_decay)
         weight_decay = 0
         setattr(args.optimizer, 'original_weight_decay', args.optimizer.weight_decay)
         setattr(args.optimizer, 'weight_decay', weight_decay)
     else:
-        print("Applying weight decay to all parameters")
+        logger.info("Applying weight decay to all parameters.")
         parameters = model.parameters()
         weight_decay = args.optimizer.weight_decay
     

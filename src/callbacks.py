@@ -3,6 +3,7 @@
 
 import torch
 import logging
+from datetime import datetime
 
 class ModelCheckpoint:
     def __init__(self, filepath, monitor='val_loss', metadata=None):
@@ -20,7 +21,7 @@ class ModelCheckpoint:
             return None
 
         if self.monitor_op(current, self.best):
-            self.logger.info(f"Epoch {epoch + 1}: '{self.monitor}' improved from {self.best:.6f} to {current:.6f}. Saving model to {self.filepath}")
+            self.logger.info(f"Epoch {epoch + 1} - '{self.monitor}' improved from {self.best:.6f} to {current:.6f}. Saving model to {self.filepath}")
             self.best = current
             chkpt = {
                 'model_state_dict': logs['model_state_dict'],
@@ -29,7 +30,8 @@ class ModelCheckpoint:
                 self.monitor: current,
                 **self.metadata
             }
-            torch.save(chkpt, self.filepath)
+            chkpt_filepath = str(self.filepath) + f"_epoch_{epoch}_" + datetime.now().isoformat(timespec='seconds', sep='_')
+            torch.save(chkpt, chkpt_filepath)
         else:
-            self.logger.info(f"Epoch {epoch}: '{self.monitor}' did not improve from {self.best:.6f}.Skipping checkpoint.")
+            self.logger.info(f"Epoch {epoch + 1} - '{self.monitor}' did not improve from {self.best:.6f}.Skipping checkpoint.")
 

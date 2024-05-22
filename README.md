@@ -65,57 +65,13 @@ This should download everything needed to train the model and unpack them into t
 Even if you don't have the creds for AWS, you should still be able to get most of the datasets as it will check and download them directly from the source. This route takes longer though.
 
 # :hammer_and_wrench: Data Preprocessing
-Each of the datasets originally has very different mask structures. For instance, the grass clover dataset has `.png` images with the following categories and pixel values"
-> 0. soil
-> 1. clover
-> 2. grass
-> 3. weeds
-> 4. white clover
-> 5. red clover
-> 6. dandelion
-> 7. shepherds_purse
-> 8. thistle
-> 9. white_clover_flower
-> 10. white_clover_leaf
-> 11. red_clover_flower
-> 12. red_clover_leaf
-> 13. unknown_clover_leaf
-> 14. unknown_clover_flower
+Each of the datasets originally has very different mask structures. The current mapping from the original datasets to the new combined dataset is in `metadata/dataset_maps.py`
 
-This dataset is focused on identifying different parts of clover and distinguishing a few different weed species. But all we really care about for this dataset are the categories
-> 0. soil
-> 1. clover
-> 2. grass
-> 3. weeds
-
-Since everything can be grouped up into these more general categories, we need to map the original labels such that 
-> 0. soil = {soil}
-> 1. clover = {clover, white clover, red clover, white_clover_leaf, white_clover_flower, red_clover_leaf, red_clover_flower, unknown_clover_leaf, unknown_clover_flower}
-> 2. grass = {grass}
-> 3. weeds = {weeds, dandelion, shepherd's purse, thistle}
-
-Finally, these supercategories need to be mapped back to our pixel specification in `segmentation_labels.json`
-> * soil -> soil = 0
-> * clover -> pgc_clover = 3
-> * grass -> pgc_grass = 2
-> * weeds -> broadleaf_weed = 4
-
-Thus for each image in the dataset, a new mask will need to be created which caputres all of these categories.
-
-A similar mapping will need to be created for each dataset which has masks in different formats.
 
 # To Do 
-* Mapping script and functions for each dataset
-    * Output is .png of shape (1, H, W) where H, W is the same as base image.
-    * Mapped to correct classes
-* Finish DataSets and DataLoaders for labeled and unlabeled datasets
-    * Should I wrap all these in Lighting modules?
-    * Make the length of each loader the same, easiest way to wrap them using '%%' ?
-    * Set the batch size you want for each labeled and unlabled imageset and then set the _getitem_ method 
-    * Custom Sampler or WeightedRandomResampler??
-    * Lightning has some utilities like `from pl_bolts.utils.semi_supervised import balance_classes`
-* Set up weighted loss criterion with `smp.losses`
-    * args $\lambda$ and loss criterion
+* Create training, validation, and testing splits on the labeled data. Need to stratify the data based on pixel counts from each class.
+* Finish the DiceLoss and other loss criterions with an API consistent with src/losses.py
+* Set up weighted loss criterion class that can handle if one loss goes to `Nan`
     * `total_loss = labeled_loss + lam * unlabeled_loss`
 * Set up prediction and ground truth visualization functionalities
     * Overlay of target mask on orginal image
@@ -125,3 +81,4 @@ A similar mapping will need to be created for each dataset which has masks in di
     * Train a fast detector on that and use to predict UKY quadrat images as well as older kura clover image data from **venkat, schlautman, rife et al**
     * Train the marker detection model using the old images I took plus the new annotated ones and implement a ssl scheme
     * Run predictions over entire set of K1702, RegenPGC photos to get all annotations of markers and quadrat corners.
+

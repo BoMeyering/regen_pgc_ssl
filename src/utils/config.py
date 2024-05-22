@@ -18,7 +18,7 @@ class YamlConfigLoader:
         if not isinstance(path, (str, pathlib.Path)):
             raise TypeError(f"'path' argument should be either type 'str' or 'pathlib.Path', not type {type(path)}.")
         if not str(path).endswith(('.yml', '.yaml')):
-            raise ValueError(f"path should be a Yaml file ending with either '.yamll' or '.yml'.")
+            raise ValueError(f"path should be a Yaml file ending with either '.yaml' or '.yml'.")
         if not os.path.exists(path):
             raise FileNotFoundError(f"File path at {path} does not exist. Please specify a different path")
         
@@ -78,7 +78,7 @@ def setup_loggers(args):
     Args:
         args (argparse.Namespace): arguments object from the configuration file.
     """
-    filename = args.run_name + datetime.now().isoformat(timespec='seconds', sep='_') + '.log'
+    filename = args.run_name + '.log'
     filepath = Path(args.directories.log_dir) / filename
 
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')

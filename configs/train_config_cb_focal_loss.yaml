@@ -1,15 +1,11 @@
 # Training configs
-run_name: recall_loss_test
+run_name: cb_focal
 device: cuda
 directories:
-  # train_l_dir: data/processed/labeled/train
-  # train_u_dir: data/processed/unlabeled
-  # val_dir: data/processed/labeled/val
-  # test_dir: data/processed/labeled/test
-  train_l_dir: 'data/dev_data/labeled/train'
-  train_u_dir: 'data/dev_data/unlabeled/train'
-  val_dir: 'data/dev_data/labeled/val'
-  test_dir: 'data/dev_data/labeled/test'
+  train_l_dir: data/processed/labeled/train
+  train_u_dir: data/processed/unlabeled
+  val_dir: data/processed/labeled/val
+  test_dir: data/processed/labeled/test
   output_dir: outputs
   log_dir: logs
   chkpt_dir: model_checkpoints
@@ -17,13 +13,13 @@ model:
   model_name: deeplabv3
   num_classes: 8
   in_channels: 3
-  encoder_name: resnet18
+  encoder_name: resnet50
   encoder_weights: imagenet
   encoder_depth: 5
   lab_bs: 2
-  unlab_bs: 2
-  resize: [512, 512]
-  epochs: 10
+  unlab_bs: 8
+  resize: [1024, 1024]
+  epochs: 20
 optimizer:
   name: SGD
   weight_decay: 0.00001
@@ -39,7 +35,7 @@ scheduler:
   name: ExponentialLR
   gamma: 0.9
 loss:
-  name: ACBLoss
+  name: CBLoss
   ignore_index: -1
   label_smoothing: 0.0
   alpha: 0.5
@@ -47,11 +43,11 @@ loss:
   gamma: 2
   eps: 0.0000001
   reduction: 'mean'
-  loss_type: CELoss
-  use_weights: False
+  loss_type: FocalLoss
+  use_weights: True
 fixmatch:
-  tau: [.1]
+  tau: [.85]
   # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
-  lam: 0.2 # Scaling factor for loss function
+  lam: 1.0 # Scaling factor for loss function
 
 
