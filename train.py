@@ -63,6 +63,7 @@ def main(args):
 
     # Create model specified in configs
     model = create_smp_model(args)
+    model = torch.nn.DataParallel(model) # For running across multiple GPUs
     model.to(args.device)
     logger.info(f"Instantiated {args.model.model_name} with {args.model.encoder_name} backbone.")
 
