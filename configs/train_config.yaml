@@ -39,7 +39,7 @@ scheduler:
   name: ExponentialLR
   gamma: 0.9
 loss:
-  name: ACBLoss
+  name: TverskyLoss
   ignore_index: -1
   label_smoothing: 0.0
   alpha: 0.5
@@ -47,7 +47,7 @@ loss:
   gamma: 2
   eps: 0.0000001
   reduction: 'mean'
-  loss_type: CELoss
+  loss_type: 
   use_weights: False
 fixmatch:
   tau: [.1]

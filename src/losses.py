@@ -348,71 +348,97 @@ class RecallLoss(torch.nn.Module):
         return loss
 
 
+class DiceLoss(torch.nn.Module):
+    """
+    Implementation of Dice Loss
+    https://arxiv.org/abs/1606.04797
+    """
+    def __init__(self, smooth: float = 1.0, reduction: str = 'mean'):
+        super().__init__()
+        self.smooth = smooth
+        self.reduction = reduction
+    
+    def forward(self, preds: torch.tensor, targets: torch.tensor, mask: Optional[torch.BoolTensor] = None) -> torch.tensor:
+        """
+        Forward method of DiceLoss.
 
-# class ACWLoss(torch.nn.Module):
-#     def __init__(self):
-#         super().__init__()
+        Args:
+            preds (torch.tensor): The raw logits from the model.
+            targets (torch.tensor): The ground truth targets.
+            mask (Optional[torch.BoolTensor], optional): A boolean torch tensor of shape (N, H, W) of pixels to exclude. Defaults to None.
 
-#     def forward(self, preds, targets, mask: torch.BoolTensor = None):
-#         pass
+        Returns:
+            torch.tensor: A scalar loss value if reduction is 'mean' or 'sum', else a loss tensor of shape (N, H, W).
+        """
+        preds = torch.softmax(preds, dim=1)
+        targets_one_hot = F.one_hot(targets, num_classes=preds.shape[1]).permute(0, 3, 1, 2).float()
+        
+        if mask is not None:
+            mask = mask.unsqueeze(1)
+            preds = preds * mask
+            targets_one_hot = targets_one_hot * mask
 
-# class DiceLoss(torch.nn.Module):
-#     def __init__(self):
-#         super().__init__()
+        intersection = (preds * targets_one_hot).sum(dim=(2, 3))
+        union = preds.sum(dim=(2, 3)) + targets_one_hot.sum(dim=(2, 3))
 
-#     def forward(self, preds, targets, mask: torch.BoolTensor = None):
-#         pass
+        dice_score = (2. * intersection + self.smooth) / (union + self.smooth)
+        loss = 1 - dice_score
 
-# class FocalTverskyLoss(torch.nn.Module):
-#     def __init__(self):
-#         super().__init__()
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        elif self.reduction == 'none':
+            return loss
+        else:
+            raise ValueError(f"Invalid reduction mode: {self.reduction}. Must be one of ['mean', 'sum', 'none']")
 
-#     def forward(self, preds, targets, mask: torch.BoolTensor = None):
-#         pass
+class TverskyLoss(torch.nn.Module):
+    """
+    Implementation of Tversky Loss
+    https://arxiv.org/abs/1706.05721
+    """
+    def __init__(self, alpha: float = 0.5, beta: float = 0.5, smooth: float = 1.0, reduction: str = 'mean'):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.smooth = smooth
+        self.reduction = reduction
+    
+    def forward(self, preds: torch.tensor, targets: torch.tensor, mask: Optional[torch.BoolTensor] = None) -> torch.tensor:
+        """
+        Forward method of TverskyLoss.
 
+        Args:
+            preds (torch.tensor): The raw logits from the model.
+            targets (torch.tensor): The ground truth targets.
+            mask (Optional[torch.BoolTensor], optional): A boolean torch tensor of shape (N, H, W) of pixels to exclude. Defaults to None.
 
-# if __name__ == '__main__':
-#     logits = torch.randn(3, 4, 5, 5) * 2
-#     sm = F.softmax(logits + torch.randn(3, 4, 5, 5), dim=1)
-#     max_p, targets = torch.max(sm, dim=1)
+        Returns:
+            torch.tensor: A scalar loss value if reduction is 'mean' or 'sum', else a loss tensor of shape (N, H, W).
+        """
+        preds = torch.softmax(preds, dim=1)
+        targets_one_hot = F.one_hot(targets, num_classes=preds.shape[1]).permute(0, 3, 1, 2).float()
+        # print(targets_one_hot.shape)
+        
+        if mask is not None:
+            mask = mask.unsqueeze(1)
+            preds = preds * mask
+            print(preds.shape)
+            targets_one_hot = targets_one_hot * mask
 
-#     mask = torch.ge(max_p, 0.8)
+        true_pos = (preds * targets_one_hot).sum(dim=(2, 3))
+        false_neg = ((1 - preds) * targets_one_hot).sum(dim=(2, 3))
+        false_pos = (preds * (1 - targets_one_hot)).sum(dim=(2, 3))
 
-#     samples = torch.tensor([2390, 4201, 9011, 6850])
-#     inv_weights = 1/samples
+        tversky_index = (true_pos + self.smooth) / (true_pos + self.alpha * false_neg + self.beta * false_pos + self.smooth)
+        loss = 1 - tversky_index
 
-#     cross_entropy = CELoss()
-#     loss = cross_entropy.forward(preds=logits, targets=targets, mask=mask)
-#     print("CE LOSS: \t\t", loss)
-
-#     weighted_ce = CELoss(weights=inv_weights)
-#     loss = weighted_ce.forward(preds=logits, targets=targets, mask=mask)
-#     print("WEIGHTED CE LOSS: \t", loss)
-
-#     focal_loss = FocalLoss(gamma=.5)
-#     loss = focal_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("FOCAL LOSS: \t\t", loss)
-
-#     cb_ce_loss = CBLoss(samples=samples, loss_type='CELoss', gamma=.5)
-#     loss = cb_ce_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("CB CE LOSS: \t\t", loss)
-
-#     cb_focal_loss = CBLoss(samples=samples, loss_type='FocalLoss', gamma=.5)
-#     loss = cb_focal_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("CB FOCAL LOSS: \t\t", loss)
-
-#     acb_ce_loss = ACBLoss(samples=samples, loss_type='CELoss', gamma=.5)
-#     loss = acb_ce_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("ACB CE LOSS: \t\t", loss)
-
-#     acb_focal_loss = ACBLoss(samples=samples, loss_type='FocalLoss', gamma=.5)
-#     loss = acb_focal_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("ACB FOCAL LOSS: \t", loss)
-
-#     recall_ce_loss = RecallLoss(samples=samples, loss_type='CELoss', gamma=.5)
-#     loss = recall_ce_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("RECALL CE LOSS: \t", loss)
-
-#     recall_focal_loss = RecallLoss(samples=samples, loss_type='FocalLoss', gamma=.5)
-#     loss = recall_focal_loss.forward(preds=logits, targets=targets, mask=mask)
-#     print("RECALL FOCAL LOSS: \t", loss)
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        elif self.reduction == 'none':
+            return loss
+        else:
+            raise ValueError(f"Invalid reduction mode: {self.reduction}. Must be one of ['mean', 'sum', 'none']")

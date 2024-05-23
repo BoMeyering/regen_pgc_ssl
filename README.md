@@ -66,13 +66,42 @@ Even if you don't have the creds for AWS, you should still be able to get most o
 
 # :hammer_and_wrench: Data Preprocessing
 Each of the datasets originally has very different mask structures. The current mapping from the original datasets to the new combined dataset is in `metadata/dataset_maps.py`
+# Class Imbalance and Loss Functions
+Furthermore the class labels for the masks are highly imbalanced which can pose a problem to the optimization of the model weights without the proper loss functions. 
+<figure>
+    <img src="./assets/images/class_img_counts.png"
+         alt="Image counts for each class">
+    <figcaption>Counts of the images that contain each class.</figcaption>
+</figure>
 
+<figure>
+    <img src="./assets/images/class_pixel_counts.png"
+         alt="Pixel counts for each class">
+    <figcaption>Counts of the total number of pixels for each class.</figcaption>
+</figure>
+
+I set up a set of training experiments to test the efficacy of different loss functions commonly used to combat class imbalance problems.
+* Multiclass Cross Entropy weighted by the inverse of the class pixel counts
+* Focal loss
+* Class Balanced loss: Using both cross entropy and focal loss
+* Adaptive Class Balanced loss: Using both cross entropy and focal loss
+* Recall Loss
+* Dice Loss
+* Tversky Loss
+
+All of these experiments were run using a DeepLabV3+ model with a Resnet50 backbone under equivalent conditions. The unlabeled loss was masked to exclude pixels with less than 0.85 class prediction confidence for the pseudo-labels.
+
+# Metrics for Model Evaluation
+All models are evaluated on a common validation and test set. A standard set of metrics are applied for all predictions. These metrics are computed both on the global average level over all classes as well as broken down by individual class.
+* F1 Score
+* Jaccard Index
+* Accuracy
+* Precision
+* Recall
+
+Additionally, these metrics, in addition to loss values are logged in tensorboard both at every batch step as well as the overall epoch averages.
 
 # To Do 
-* Create training, validation, and testing splits on the labeled data. Need to stratify the data based on pixel counts from each class.
-* Finish the DiceLoss and other loss criterions with an API consistent with src/losses.py
-* Set up weighted loss criterion class that can handle if one loss goes to `Nan`
-    * `total_loss = labeled_loss + lam * unlabeled_loss`
 * Set up prediction and ground truth visualization functionalities
     * Overlay of target mask on orginal image
     * Overlay of prediction mask on original image

@@ -109,7 +109,7 @@ class FixMatchTrainer(Trainer):
         u_targets, mask = get_pseudo_labels(self.args, weak_logits)
 
         # Calculate unlabeled loss
-        u_loss = self.criterion(strong_logits, u_targets)
+        u_loss = self.criterion(strong_logits, u_targets, mask)
         
         # Check for invalid loss
         if torch.isnan(u_loss):
