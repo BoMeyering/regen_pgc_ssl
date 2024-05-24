@@ -1,5 +1,5 @@
 # Training configs
-run_name: ce_unweighted
+run_name: recall
 device: cuda
 directories:
   train_l_dir: data/processed/labeled/train
@@ -35,7 +35,7 @@ scheduler:
   name: ExponentialLR
   gamma: 0.9
 loss:
-  name: CELoss
+  name: RecallLoss
   ignore_index: -1
   label_smoothing: 0.0
   alpha: 0.5
@@ -43,7 +43,7 @@ loss:
   gamma: 2
   eps: 0.0000001
   reduction: 'mean'
-  loss_type: 
+  loss_type: CELoss
   use_weights: False
 fixmatch:
   tau: [.85]

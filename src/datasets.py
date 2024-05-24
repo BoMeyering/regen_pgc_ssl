@@ -114,12 +114,8 @@ class LabeledDataset(Dataset):
         target_path = Path(self.target_dir) / target_key
 
         # read in images and targets
-        # img = cv2.imread(str(img_path))
-        # target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)
-
-        # added for dev data
         img = cv2.imread(str(img_path))
-        target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)//50
+        target = cv2.imread(str(target_path), cv2.IMREAD_GRAYSCALE)
 
         # transform images and targets
         transformed = self.transforms(image=img, target=target)

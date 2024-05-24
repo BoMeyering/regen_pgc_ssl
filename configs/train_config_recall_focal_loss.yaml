@@ -3,7 +3,7 @@ run_name: recall
 device: cuda
 directories:
   train_l_dir: data/processed/labeled/train
-  train_u_dir: data/processed/unlabeled
+  # train_u_dir: data/processed/unlabeled
   val_dir: data/processed/labeled/val
   test_dir: data/processed/labeled/test
   output_dir: outputs
@@ -17,9 +17,9 @@ model:
   encoder_weights: imagenet
   encoder_depth: 5
   lab_bs: 2
-  unlab_bs: 8
-  resize: [1024, 1024]
-  epochs: 20
+  unlab_bs: 2
+  resize: [512, 512]
+  epochs: 10
 optimizer:
   name: SGD
   weight_decay: 0.00001
@@ -43,7 +43,7 @@ loss:
   gamma: 2
   eps: 0.0000001
   reduction: 'mean'
-  loss_type: 
+  loss_type: FocalLoss
   use_weights: False
 fixmatch:
   tau: [.85]

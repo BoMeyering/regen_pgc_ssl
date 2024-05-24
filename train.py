@@ -24,7 +24,7 @@ from src.datasets import LabeledDataset, UnlabeledDataset
 from src.transforms import get_train_transforms, get_strong_transforms, get_weak_transforms, get_val_transforms
 from src.dataloaders import DataLoaderBalancer
 from src.fixmatch import get_pseudo_labels
-from src.trainer import FixMatchTrainer, TBLogger
+from src.trainer import FixMatchTrainer, SupervisedTrainer, TBLogger
 from src.losses import CELoss, FocalLoss, CBLoss, ACBLoss, RecallLoss, get_loss_criterion
 
 from metadata.dataset_maps import mapping
@@ -106,39 +106,65 @@ def main(args):
     # Build Datasets and Dataloaders
     logger.info(f"Building datasets from {[v for _, v in vars(args.directories).items() if v.startswith('data')]}")
     train_l_ds = LabeledDataset(root_dir=args.directories.train_l_dir, transforms=get_train_transforms(resize=args.model.resize))
-    train_u_ds = UnlabeledDataset(root_dir=args.directories.train_u_dir, weak_transforms=get_weak_transforms(resize=args.model.resize), strong_transforms=get_strong_transforms(resize=args.model.resize))
     val_ds = LabeledDataset(root_dir=args.directories.val_dir, transforms=get_val_transforms(resize=args.model.resize))
     test_ds = LabeledDataset(root_dir=args.directories.test_dir, transforms=get_val_transforms(resize=args.model.resize))
+    if 'train_u_dir' in vars(args.directories).keys():
+        train_u_ds = UnlabeledDataset(root_dir=args.directories.train_u_dir, weak_transforms=get_weak_transforms(resize=args.model.resize), strong_transforms=get_strong_transforms(resize=args.model.resize))
+        dl_balancer = DataLoaderBalancer(train_l_ds, train_u_ds, batch_sizes=[args.model.lab_bs, args.model.unlab_bs], drop_last=False)
+        dataloaders, max_length = dl_balancer.balance_loaders()
+        logger.info(f"Training dataloaders balanced. Labeled DL BS: {args.model.lab_bs} Unlabaled DL BS: {args.model.unlab_bs}.")
+        logger.info(f"Max loader length for epoch iteration: {max_length}")
+        val_dataloader = DataLoader(val_ds, batch_size=args.model.lab_bs, shuffle=False, drop_last=False)
+        logger.info(f"Validation dataloader instantiated")
 
-    dl_balancer = DataLoaderBalancer(train_l_ds, train_u_ds, batch_sizes=[args.model.lab_bs, args.model.unlab_bs], drop_last=False)
-    dataloaders, max_length = dl_balancer.balance_loaders()
-    logger.info(f"Training dataloaders balanced. Labeled DL BS: {args.model.lab_bs} Unlabaled DL BS: {args.model.unlab_bs}.")
-    logger.info(f"Max loader length for epoch iteration: {max_length}")
+        fixmatch_trainer = FixMatchTrainer(
+            name='Test_Trainer',
+            args=args, 
+            model=model, 
+            train_loaders = dataloaders, 
+            train_length=max_length, 
+            val_loader=val_dataloader, 
+            optimizer=optimizer, 
+            criterion=loss_criterion,
+            scheduler=scheduler,
+            tb_logger=tb_logger,
+            class_map=class_map
+        )
 
-    val_dataloader = DataLoader(val_ds, batch_size=args.model.lab_bs, shuffle=False, drop_last=False)
-    logger.info(f"Validation dataloader instantiated")
+        logger.info(f"Created FixMatchTrainer {fixmatch_trainer.trainer_id} for semi-supervised learning.")
+        logger.info("Training initiated")
+        fixmatch_trainer.train()
+        logger.info("Training complete")
 
-    fixmatch_trainer = FixMatchTrainer(
-        name='Test_Trainer',
-        args=args, 
-        model=model, 
-        train_loaders = dataloaders, 
-        train_length=max_length, 
-        val_loader=val_dataloader, 
-        optimizer=optimizer, 
-        criterion=loss_criterion,
-        scheduler=scheduler,
-        tb_logger=tb_logger,
-        class_map=class_map
-    )
+        tb_writer.flush()
+        tb_writer.close()
+    else:
+        train_dataloader = DataLoader(train_l_ds, batch_size=args.model.lab_bs, shuffle=True, drop_last=False)
+        val_dataloader = DataLoader(val_ds, batch_size=args.model.lab_bs, shuffle=False, drop_last=False)
+        test_dataloader = DataLoader(test_ds, batch_size=args.model.lab_bs, shuffle=False, drop_last=False)
+        logger.info(f"All dataloaders instantiated.")
 
-    logger.info("Created FixMatchTrainer for semi supervised learning.")
-    logger.info("Training initiated")
-    fixmatch_trainer.train()
-    logger.info("Training complete")
+        supervised_trainer = SupervisedTrainer(
+            name='Supervised Trainer',
+            args=args,
+            model=model,
+            train_loader=train_dataloader,
+            val_loader=val_dataloader,
+            optimizer=optimizer,
+            criterion=loss_criterion,
+            scheduler=scheduler,
+            tb_logger=tb_logger,
+            class_map=class_map
+        )
 
-    tb_writer.flush()
-    tb_writer.close()
+        logger.info(f"Created SupervisedTrainer {supervised_trainer.trainer_id} for fully supervised learning.")
+        logger.info("Training initiated")
+        supervised_trainer.train()
+        logger.info("Training complete")
+
+        tb_writer.flush()
+        tb_writer.close()
+    
 
 if __name__ == '__main__':
     main(args)

@@ -47,13 +47,8 @@ class CELoss(torch.nn.Module):
         self.weights = weights
         self.reduction = reduction
         self.use_weights = use_weights
-
-        if self.use_weights:
-            logger.info("Using inverse weights for CELoss.")
-        else:
-            logger.info("Not using inverse weights for CELoss.")
     
-    def _mask_targets(targets: torch.Tensor, mask: torch.BoolTensor, ignore_index: int=-1) -> torch.tensor:
+    def _mask_targets(self, targets: torch.Tensor, mask: torch.BoolTensor, ignore_index: int=-1) -> torch.tensor:
         """
         Helper function to create a new tareget with the ignore_index at the masked locations.
 
@@ -370,6 +365,7 @@ class DiceLoss(torch.nn.Module):
         Returns:
             torch.tensor: A scalar loss value if reduction is 'mean' or 'sum', else a loss tensor of shape (N, H, W).
         """
+
         preds = torch.softmax(preds, dim=1)
         targets_one_hot = F.one_hot(targets, num_classes=preds.shape[1]).permute(0, 3, 1, 2).float()
         
