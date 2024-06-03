@@ -1,0 +1,53 @@
+# Training configs
+run_name: ce_unweighted_fixmatch
+device: cuda
+directories:
+  train_l_dir: data/processed/labeled/train
+  train_u_dir: data/processed/unlabeled
+  val_dir: data/processed/labeled/val
+  test_dir: data/processed/labeled/test
+  output_dir: outputs
+  log_dir: logs
+  chkpt_dir: model_checkpoints
+model:
+  model_name: deeplabv3
+  num_classes: 8
+  in_channels: 3
+  encoder_name: resnet50
+  encoder_weights: imagenet
+  encoder_depth: 5
+  lab_bs: 2
+  unlab_bs: 4
+  resize: [1024, 1024]
+  epochs: 10
+optimizer:
+  name: SGD
+  weight_decay: 0.00001
+  filter_bias_and_bn: True
+  ema: True # Exponential moving average of model parameters
+  ema_decay: 0.9
+  lr: 0.005
+  momentum: 0.99
+  beta1:
+  beta2:
+  nesterov: True
+scheduler: 
+  name: ExponentialLR
+  gamma: 0.9
+loss:
+  name: CELoss
+  ignore_index: -1
+  label_smoothing: 0.0
+  alpha: 0.5
+  beta: 0.5
+  gamma: 2
+  eps: 0.0000001
+  reduction: 'mean'
+  loss_type: 
+  use_weights: False
+fixmatch:
+  tau: [.85]
+  # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
+  lam: 1.0 # Scaling factor for loss function
+
+
