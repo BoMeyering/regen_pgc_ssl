@@ -84,7 +84,7 @@ class FixMatchTrainer(Trainer):
 
         try:
             self.rank = dist.get_rank()
-        except RuntimeError as e:
+        except ValueError as e:
             self.rank = 0
 
         # setup metrics class
@@ -124,6 +124,7 @@ class FixMatchTrainer(Trainer):
             if self.rank == 0:
                 self.logger.warn(f"NaN encountered in unlabeled loss. Setting to 0.")
             # raise ValueError("Unlabeled loss is 'Nan'. Stopping model training.")
+            u_loss = torch.tensor([0])
             total_loss = l_loss
         else:
             # Compute total loss
@@ -352,7 +353,7 @@ class SupervisedTrainer(Trainer):
 
         try:
             self.rank = dist.get_rank()
-        except RuntimeError as e:
+        except ValueError as e:
             self.rank = 0
 
         # setup metrics class
@@ -460,7 +461,7 @@ class SupervisedTrainer(Trainer):
             self.logger.info(f"Epoch {epoch + 1} - Avg Metrics {avg_metrics}")
             self.logger.info(f"Epoch {epoch + 1} - Multiclass Metrics {mc_metrics}")
 
-        return loss
+        # return loss
     
     @torch.no_grad()
     def _val_step(self, batch: Tuple):
@@ -545,6 +546,7 @@ class SupervisedTrainer(Trainer):
             # Update the epoch in the DistributedSampler
             if self.train_sampler is not None:
                 self.train_sampler.set_epoch(epoch)
+
             # Train and validate one epoch
             train_loss = self._train_epoch(epoch)
             val_loss = self._val_epoch(epoch)

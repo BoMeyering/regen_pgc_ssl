@@ -46,18 +46,18 @@ class DataLoaderBalancer:
             for i, ds in enumerate(self.datasets):
                 self.dl_lengths.append(math.ceil(len(ds) / self.batch_sizes[i]))
 
-        self.maxdl = np.argmax(self.dl_lengths)
+        self.max_idx = np.argmax(self.dl_lengths)
                 
     def balance_loaders(self):
         # Get the index of the longest dataloader
         for i, ds in enumerate(self.datasets):
             # For the longest dataloader, create a loader that iterates over everything once
-            if i == self.maxdl:
+            if i == self.max_idx:
                 self.dataloaders.append(DataLoader(ds, batch_size=self.batch_sizes[i], shuffle=True, drop_last=self.drop_last))
             else: # Wrap the rest of the dataloaders with InfiniteSampler
                 self.dataloaders.append(DataLoader(ds, batch_size=self.batch_sizes[i], sampler=InfiniteSampler(ds), drop_last=self.drop_last))
         
-        return self.dataloaders, self.dl_lengths[self.maxdl]
+        return self.dataloaders, self.dl_lengths[self.max_idx]
     
 class DistributedInfiniteSampler(Sampler):
     def __init__(self, dataset: Dataset, num_replicas: Optional[int] = None, rank: Optional[int]=None, shuffle: bool=True, seed: int=0):
@@ -125,7 +125,7 @@ class DistributedDataloaderBalancer:
     def balance_loaders(self):
         for i, (ds, bs) in enumerate(zip(self.datasets, self.batch_sizes)):
             # For the longest dataloader, create a loader that iterates over everything once
-            if i == self.maxdl:
+            if i == self.max_idx:
                 # Create a distributed sampler with DistributedSampler
                 self.sampler = DistributedSampler(
                     dataset=ds,

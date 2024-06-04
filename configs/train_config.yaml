@@ -1,28 +1,24 @@
 # Training configs
-run_name: recall_loss_test
+run_name: dlv3p_1024_rn50_ce_unweighted
 device: cuda
 directories:
-  # train_l_dir: data/processed/labeled/train
+  train_l_dir: data/processed/labeled/train
   # train_u_dir: data/processed/unlabeled
-  # val_dir: data/processed/labeled/val
-  # test_dir: data/processed/labeled/test
-  train_l_dir: 'data/dev_data/labeled/train'
-  train_u_dir: 'data/dev_data/unlabeled/train'
-  val_dir: 'data/dev_data/labeled/val'
-  test_dir: 'data/dev_data/labeled/test'
+  val_dir: data/processed/labeled/val
+  test_dir: data/processed/labeled/test
   output_dir: outputs
   log_dir: logs
   chkpt_dir: model_checkpoints
 model:
-  model_name: deeplabv3
+  model_name: deeplabv3plus
   num_classes: 8
   in_channels: 3
-  encoder_name: resnet18
+  encoder_name: resnet50
   encoder_weights: imagenet
   encoder_depth: 5
-  lab_bs: 2
+  lab_bs: 5
   unlab_bs: 2
-  resize: [512, 512]
+  resize: [1024, 1024]
   epochs: 10
 optimizer:
   name: SGD
@@ -30,7 +26,7 @@ optimizer:
   filter_bias_and_bn: True
   ema: True # Exponential moving average of model parameters
   ema_decay: 0.9
-  lr: 0.001
+  lr: 0.005
   momentum: 0.99
   beta1:
   beta2:
@@ -39,7 +35,7 @@ scheduler:
   name: ExponentialLR
   gamma: 0.9
 loss:
-  name: TverskyLoss
+  name: CELoss
   ignore_index: -1
   label_smoothing: 0.0
   alpha: 0.5
@@ -50,7 +46,7 @@ loss:
   loss_type: 
   use_weights: False
 fixmatch:
-  tau: [.1]
+  tau: [.85]
   # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
   lam: 0.2 # Scaling factor for loss function
 

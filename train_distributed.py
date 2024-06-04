@@ -43,7 +43,12 @@ def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    dist.init_process_group(
+        backend="nccl", 
+        init_method='env://',
+        world_size=world_size,
+        rank=rank
+    )
 
 def prepare_ddp_dataloader(rank, world_size, dataset, batch_size=16, pin_memory=False, shuffle=True, drop_last=True, num_workers=0):
     sampler =  DistributedSampler(
@@ -98,7 +103,8 @@ def main(rank, world_size, args):
     logger = logging.getLogger()
 
     # Create model specified in configs and move to the device
-    model = create_smp_model(args).to(args.device)
+    torch.cuda.set_device(rank)
+    model = create_smp_model(args).to(f"cuda:{rank}")
     model = DDP(model, device_ids=[rank])
     logger.info(f"Instantiated {args.model.model_name} with {args.model.encoder_name} backbone.")
 

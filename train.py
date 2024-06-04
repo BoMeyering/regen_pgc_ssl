@@ -42,17 +42,14 @@ def main(args):
 
     # Instantiate args namespace with config and set values
     arg_setter = ArgsAttributes(args, config)
-    # Set attributes and validate
     arg_setter.set_args_attr()
-    arg_setter.validate()
+
+    # Grab validated args Namespace
+    args = arg_setter.args
     
     # Get class map
     class_map = mapping['new_mapping']
 
-    # Grab validated args Namespace
-    args = arg_setter.args
-
-    print(args)
     # Set up Tensorboard
     tb_writer = SummaryWriter(log_dir="/".join(('runs', args.run_name)))
     tb_logger = TBLogger(tb_writer)
@@ -63,7 +60,6 @@ def main(args):
 
     # Create model specified in configs
     model = create_smp_model(args)
-    # model = torch.nn.DataParallel(model) # For running across multiple GPUs
     model.to(args.device)
     logger.info(f"Instantiated {args.model.model_name} with {args.model.encoder_name} backbone.")
 
@@ -106,6 +102,7 @@ def main(args):
 
     # Build Datasets and Dataloaders
     logger.info(f"Building datasets from {[v for _, v in vars(args.directories).items() if v.startswith('data')]}")
+
     train_l_ds = LabeledDataset(root_dir=args.directories.train_l_dir, transforms=get_train_transforms(resize=args.model.resize))
     val_ds = LabeledDataset(root_dir=args.directories.val_dir, transforms=get_val_transforms(resize=args.model.resize))
     test_ds = LabeledDataset(root_dir=args.directories.test_dir, transforms=get_val_transforms(resize=args.model.resize))
@@ -140,7 +137,7 @@ def main(args):
         tb_writer.flush()
         tb_writer.close()
     else:
-        train_dataloader = DataLoader(train_l_ds, batch_size=args.model.lab_bs, shuffle=True, drop_last=False)
+        train_dataloader = DataLoader(train_l_ds, batch_size=args.model.lab_bs, shuffle=True, drop_last=True)
         val_dataloader = DataLoader(val_ds, batch_size=args.model.lab_bs, shuffle=False, drop_last=False)
         test_dataloader = DataLoader(test_ds, batch_size=args.model.lab_bs, shuffle=False, drop_last=False)
         logger.info(f"All dataloaders instantiated.")
