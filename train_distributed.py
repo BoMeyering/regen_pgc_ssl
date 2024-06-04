@@ -172,13 +172,13 @@ def main(rank, world_size, args):
         )
 
         # Balance loaders
-        dataloaders, max_length = dl_balancer.balance_loaders()
+        dataloaders, iter_length = dl_balancer.balance_loaders()
 
         # Pack up the training samplers in a tuple
         train_samplers = dl_balancer.infinite_sampler, dl_balancer.sampler
 
         logger.info(f"Training dataloaders balanced. Labeled DL BS: {args.model.lab_bs} Unlabaled DL BS: {args.model.unlab_bs}.")
-        logger.info(f"Max loader length for epoch iteration: {max_length}")
+        logger.info(f"Max loader length for epoch iteration: {iter_length}")
 
         # Instantiate distributed val dataloader
         val_dataloader, _ = prepare_ddp_dataloader(
@@ -198,7 +198,7 @@ def main(rank, world_size, args):
             args=args, 
             model=model, 
             train_loaders = dataloaders, 
-            train_length=max_length, 
+            train_length=iter_length, 
             train_samplers=train_samplers,
             val_loader=val_dataloader, 
             optimizer=optimizer, 

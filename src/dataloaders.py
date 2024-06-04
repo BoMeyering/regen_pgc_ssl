@@ -75,7 +75,7 @@ class DistributedInfiniteSampler(Sampler):
         self.num_replicas = num_replicas
         self.rank = rank
         self.epoch = 0
-        self.num_samples = int(math.ceil(len(self.dataset) / self.num_replicas))
+        self.num_samples = int(math.ceil((len(self.dataset) - self.num_replicas) / self.num_replicas)) # Make sure that everything is evenly divisible by the number of replicas
         self.total_size = self.num_samples * self.num_replicas
         self.indices = list(range(len(self.dataset)))
         self.shuffle = shuffle
@@ -120,7 +120,7 @@ class DistributedDataloaderBalancer:
                 raise ValueError(f"Dataset {i+1} has fewer elements than its specified batch size. Please select a batch size smaller than {bs} and try again.")
             self.dl_lengths.append(len(ds) // bs)
 
-        self.maxdl = np.argmax(self.dl_lengths)
+        self.max_idx = np.argmax(self.dl_lengths)
 
     def balance_loaders(self):
         for i, (ds, bs) in enumerate(zip(self.datasets, self.batch_sizes)):
@@ -163,5 +163,5 @@ class DistributedDataloaderBalancer:
                 # Append the dataloader
                 self.dataloaders.append(dataloader)
          
-        return self.dataloaders, self.dl_lengths[self.maxdl]
+        return self.dataloaders, self.sampler.num_samples
         

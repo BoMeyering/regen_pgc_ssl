@@ -178,7 +178,7 @@ class FixMatchTrainer(Trainer):
                     epoch=epoch + 1,
                     epochs=self.args.model.epochs,
                     batch=batch_idx + 1,
-                    iter=len(train_l_loader),
+                    iter=self.train_length,
                     lr=self.scheduler.get_last_lr()[0],
                     loss = loss.item()
                 )
