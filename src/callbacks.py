@@ -30,7 +30,8 @@ class ModelCheckpoint:
                 self.monitor: current,
                 **self.metadata
             }
-            chkpt_filepath = str(self.filepath) + f"_epoch_{epoch}_" + datetime.now().isoformat(timespec='seconds', sep='_')
+            now = datetime.now().isoformat(timespec='seconds', sep='_').replace(":", ".")
+            chkpt_filepath = str(self.filepath) + f"_epoch_{epoch}_" + now
             torch.save(chkpt, chkpt_filepath)
         else:
             self.logger.info(f"Epoch {epoch + 1} - '{self.monitor}' did not improve from {self.best:.6f}.Skipping checkpoint.")

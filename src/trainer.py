@@ -101,44 +101,70 @@ class FixMatchTrainer(Trainer):
         l_img, l_targets = l_batch
         weak_img, strong_img = u_batch
         
-        # Concatenate all inputs and send to device
-        inputs = torch.cat((l_img, weak_img, strong_img)).float().to(self.args.device)
+        # ***Deprecated***
+        # Concatenate all inputs and send to device 
+        # inputs = torch.cat((l_img, weak_img, strong_img)).float().to(self.args.device)
+        # l_targets = l_targets.long().to(self.args.device)
+        # ***Deprecated***
+        
+        # Send inputs and targets to device
+        inputs = torch.cat((l_img, strong_img)).float().to(self.args.device)
+        weak_inputs = weak_img.float().to(self.args.device)
         l_targets = l_targets.long().to(self.args.device)
 
         # Compute logits for labeled and unlabeled images
-        logits = self.model(inputs)
-        l_logits = logits[:len(l_img)]
-        weak_logits, strong_logits = logits[len(l_img): ].chunk(2) # grab the unlabeled logits and split into two
+        concat_logits = self.model(inputs)
+        l_logits = concat_logits[:len(l_img)]
+        strong_logits = concat_logits[len(l_img):]
+        
+        with torch.no_grad():
+            weak_logits = self.model(weak_inputs)
+
+        # ***DEPRECATED***
+        # weak_logits, strong_logits = concat_logits[len(l_img): ].chunk(2) # grab the unlabeled logits and split into two
+        # ***DEPRECATED***
 
         # Calculate labeled loss
         l_loss = self.criterion(l_logits, l_targets)
 
-        # Pseudo-label the unlabled images
+        # Pseudo-label the unlabled images (calculated in @torch.no_grad() context)
         u_targets, mask = get_pseudo_labels(self.args, weak_logits)
-
-        # Calculate unlabeled loss
-        u_loss = self.criterion(strong_logits, u_targets, mask)
         
-        # Check for invalid loss
-        if torch.isnan(u_loss):
-            if self.rank == 0:
-                self.logger.warn(f"NaN encountered in unlabeled loss. Setting to 0.")
-            # raise ValueError("Unlabeled loss is 'Nan'. Stopping model training.")
-            u_loss = torch.tensor([0])
-            total_loss = l_loss
+        # Calculate the proportion of confident predictions
+        p = mask.float().mean().item()
+
+        # Calculate scaled unlabeled loss
+        if p > 0:
+            u_loss = self.criterion(strong_logits, u_targets, mask)
+            scaled_u_loss = self.args.fixmatch.lam * p * u_loss
         else:
-            # Compute total loss
-            total_loss = l_loss + self.args.fixmatch.lam * u_loss
+            scaled_u_loss = torch.tensor(0.0, device=self.args.device)
+            if self.rank == 0:
+                self.logger.warn(f"No confident pseudo-labels were found. Unlabeled loss contribution is zero.")
+        
+        total_loss = l_loss + scaled_u_loss
+        
+        # ***DEPRECATED
+        # Check for invalid loss
+        # if torch.isnan(u_loss):
+        #     if self.rank == 0:
+        #         self.logger.warn(f"NaN encountered in unlabeled loss. Setting to 0.")
+        #     u_loss = torch.tensor([0])
+        #     total_loss = l_loss
+        # else:
+        #     # Compute total loss
+        #     total_loss = l_loss + self.args.fixmatch.lam * u_loss
+        # ***DEPRECATED***
 
         # Update loss meters
         self.meters.update("total_loss", total_loss.item(), 1)
         self.meters.update("labeled_loss", l_loss.item(), l_logits.size()[0])
-        self.meters.update("unlabeled_loss", u_loss.item(), strong_logits.size()[0])
+        self.meters.update("unlabeled_loss", scaled_u_loss.item(), strong_logits.size()[0])
     
         # Update metrics
         self.train_metrics.update(preds=l_logits, targets=l_targets)
 
-        return total_loss, l_loss, u_loss
+        return total_loss, l_loss, scaled_u_loss, p
     
     def _train_epoch(self, epoch: int):
         
@@ -165,7 +191,7 @@ class FixMatchTrainer(Trainer):
             batches = (next(train_l_loader), next(train_u_loader))
 
             # Train one batch and backpropagate
-            loss, l_loss, u_loss = self._train_step(batches)
+            loss, l_loss, u_loss, p = self._train_step(batches)
             loss.backward()
 
             # Step optimizer and update parameters for EMA
@@ -188,9 +214,11 @@ class FixMatchTrainer(Trainer):
 
             # Tensorboard batch writing
             loss_dict = {"train_loss": loss, "train_labeled_loss": l_loss, "train_unlabeled_loss": u_loss}
+            p_dict = {"p_confident": p}
             batch_step = (epoch*self.train_length) + batch_idx
             if self.rank == 0:
                 self.tb_logger.log_scalar_dict(main_tag='step_loss', scalar_dict=loss_dict, step=batch_step)
+                self.tb_logger.log_scalar_dict(main_tag='step_p', scalar_dict=p_dict, step=batch_step)
 
         # Step LR scheduler
         if self.scheduler:

@@ -31,9 +31,6 @@ def get_train_transforms(resize: Tuple=(512, 512), means: Iterable=means, std: I
         A.SafeRotate(),
         A.HorizontalFlip(),
         A.GaussianBlur(),
-        # A.Solarize(),
-        # A.ChannelShuffle(),
-        # A.RGBShift(),
         A.Normalize(mean=means, std=std),
         ToTensorV2()
     ], additional_targets={'target': 'mask'})

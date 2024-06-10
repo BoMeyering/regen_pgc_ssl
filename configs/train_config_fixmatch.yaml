@@ -10,14 +10,14 @@ directories:
   log_dir: logs
   chkpt_dir: model_checkpoints
 model:
-  model_name: deeplabv3
+  model_name: deeplabv3plus
   num_classes: 8
   in_channels: 3
   encoder_name: resnet18
   encoder_weights: imagenet
   encoder_depth: 5
   lab_bs: 1
-  unlab_bs: 2
+  unlab_bs: 3
   resize: [1024, 1024]
   epochs: 10
 optimizer:
@@ -35,7 +35,7 @@ scheduler:
   name: ExponentialLR
   gamma: 0.9
 loss:
-  name: CELoss
+  name: RecallLoss
   ignore_index: -1
   label_smoothing: 0.0
   alpha: 0.5
@@ -43,11 +43,11 @@ loss:
   gamma: 2
   eps: 0.0000001
   reduction: 'mean'
-  loss_type: 
+  loss_type: CELoss
   use_weights: False
 fixmatch:
-  tau: [.85]
+  tau: [.95]
   # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
-  lam: 1.0 # Scaling factor for loss function
+  lam: .5 # Scaling factor for loss function
 
 

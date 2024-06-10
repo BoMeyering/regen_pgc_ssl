@@ -43,8 +43,7 @@ class ArgsAttributes:
         self.config = config
     
     def append_timestamp_to_run(self):
-        now = datetime.now().isoformat(timespec='seconds', sep='_')
-        now = now.replace(":", ".")
+        now = datetime.now().isoformat(timespec='seconds', sep='_').replace(":", ".")
         try:
             if hasattr(self.args, 'run_name'):
                 self.args.run_name = "_".join((self.args.run_name, now))

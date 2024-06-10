@@ -23,9 +23,8 @@ from src.optim import EMA, ConfigOptim
 from src.datasets import LabeledDataset, UnlabeledDataset
 from src.transforms import get_train_transforms, get_strong_transforms, get_weak_transforms, get_val_transforms
 from src.dataloaders import DataLoaderBalancer
-from src.fixmatch import get_pseudo_labels
 from src.trainer import FixMatchTrainer, SupervisedTrainer, TBLogger
-from src.losses import CELoss, FocalLoss, CBLoss, ACBLoss, RecallLoss, get_loss_criterion
+from src.losses import get_loss_criterion
 
 from metadata.dataset_maps import mapping
 
