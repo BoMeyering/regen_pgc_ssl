@@ -61,6 +61,10 @@ def main(args):
     model = create_smp_model(args)
     model.to(args.device)
     logger.info(f"Instantiated {args.model.model_name} with {args.model.encoder_name} backbone.")
+    
+    if args.model.starting_weights:
+        state_dict = torch.load(args.model.starting_weights)['model_state_dict']
+        model.load_state_dict(state_dict=state_dict)
 
     # Get model parameters and weight decay. Filter out bias and batch norm parameters if necessary
     parameters = get_params(args, model)

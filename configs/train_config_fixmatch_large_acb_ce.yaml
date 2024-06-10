@@ -1,5 +1,5 @@
 # Training configs
-run_name: fixmatch_dlv3p_1024_enb4_recall_ce
+run_name: fixmatch_dlv3p_1024_enb4_acb_ce
 device: cuda
 directories:
   train_l_dir: data/processed/labeled/train
@@ -10,6 +10,7 @@ directories:
   log_dir: logs
   chkpt_dir: model_checkpoints
 model:
+  starting_weights: model_weights/dlv3p_1024_enb4_acb_ce_unweighted_2024-06-05_13.29.50_epoch_19_2024-06-06_18.42.35
   model_name: deeplabv3plus
   num_classes: 8
   in_channels: 3
@@ -35,7 +36,7 @@ scheduler:
   name: ExponentialLR
   gamma: 0.9
 loss:
-  name: RecallLoss
+  name: ACBLoss
   ignore_index: -1
   label_smoothing: 0.0
   alpha: 0.5

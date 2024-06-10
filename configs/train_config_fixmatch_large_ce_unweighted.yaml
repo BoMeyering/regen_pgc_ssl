@@ -1,0 +1,54 @@
+# Training configs
+run_name: fixmatch_dlv3p_1024_enb4_ce_unweighted
+device: cuda
+directories:
+  train_l_dir: data/processed/labeled/train
+  train_u_dir: data/processed/unlabeled
+  val_dir: data/processed/labeled/val
+  test_dir: data/processed/labeled/test
+  output_dir: outputs
+  log_dir: logs
+  chkpt_dir: model_checkpoints
+model:
+  starting_weights: model_weights/dlv3p_1024_enb4_ce_unweighted_2024-06-04_22.50.30_epoch_9_2024-06-05_13.07.20
+  model_name: deeplabv3plus
+  num_classes: 8
+  in_channels: 3
+  encoder_name: efficientnet-b4
+  encoder_weights: imagenet
+  encoder_depth: 5
+  lab_bs: 3
+  unlab_bs: 7
+  resize: [1024, 1024]
+  epochs: 10
+optimizer:
+  name: SGD
+  weight_decay: 0.00001
+  filter_bias_and_bn: True
+  ema: True # Exponential moving average of model parameters
+  ema_decay: 0.9
+  lr: 0.005
+  momentum: 0.99
+  beta1:
+  beta2:
+  nesterov: True
+scheduler: 
+  name: ExponentialLR
+  gamma: 0.9
+loss:
+  name: CELoss
+  ignore_index: -1
+  label_smoothing: 0.0
+  alpha: 0.5
+  beta: 0.5
+  gamma: 2
+  eps: 0.0000001
+  reduction: 'mean'
+  loss_type: 
+  use_weights: False
+fixmatch:
+  tau: [.95]
+  # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
+  lam: .5 # Scaling factor for loss function
+
+
