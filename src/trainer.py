@@ -219,6 +219,11 @@ class FixMatchTrainer(Trainer):
             if self.rank == 0:
                 self.tb_logger.log_scalar_dict(main_tag='step_loss', scalar_dict=loss_dict, step=batch_step)
                 self.tb_logger.log_scalar_dict(main_tag='step_p', scalar_dict=p_dict, step=batch_step)
+                
+            if batch_idx % 200 == 0:
+                avg_metrics, mc_metrics = self.train_metrics.compute()
+                print(avg_metrics)
+                print(mc_metrics)
 
         # Step LR scheduler
         if self.scheduler:

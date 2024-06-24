@@ -53,7 +53,7 @@ class ClassMeters:
 
 def main():
 
-    label_dir = 'data/processed/labeled/labels'
+    label_dir = 'data/processed/labeled/train/labels'
     # target_files = glob('*.png', root_dir=label_dir)
 
     dataset = LabelDataset(dir_path=label_dir)

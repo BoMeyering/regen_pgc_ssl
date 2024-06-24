@@ -20,7 +20,6 @@ def map_preds(preds, mapping):
     h, w = preds.shape
     color_mask = np.zeros(shape=(h, w, 3)).astype(np.uint8)
     for i in np.unique(preds):
-        print(i)
         idx = np.where(preds==i)
         rgb = mapping.get(i)
         color_mask[idx] = np.array(rgb)
