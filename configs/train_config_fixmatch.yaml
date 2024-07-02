@@ -1,24 +1,25 @@
 # Training configs
-run_name: dlv3p_1024_rn50_ce_unweighted
+run_name: fixmatch_test
 device: cuda
 directories:
   train_l_dir: data/processed/labeled/train
-  # train_u_dir: data/processed/unlabeled
+  train_u_dir: data/processed/unlabeled
   val_dir: data/processed/labeled/val
   test_dir: data/processed/labeled/test
   output_dir: outputs
   log_dir: logs
   chkpt_dir: model_checkpoints
 model:
+  starting_weights: 
   model_name: deeplabv3plus
   num_classes: 8
   in_channels: 3
-  encoder_name: resnet50
+  encoder_name: resnet18
   encoder_weights: imagenet
   encoder_depth: 5
-  lab_bs: 5
-  unlab_bs: 2
-  resize: [1024, 1024]
+  lab_bs: 20
+  unlab_bs: 48
+  resize: [256, 256]
   epochs: 10
 optimizer:
   name: SGD
@@ -46,8 +47,8 @@ loss:
   loss_type: 
   use_weights: False
 fixmatch:
-  tau: [.85]
+  tau: [.95]
   # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class
-  lam: 0.2 # Scaling factor for loss function
+  lam: .5 # Scaling factor for loss function
 
 

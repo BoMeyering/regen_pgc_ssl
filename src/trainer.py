@@ -1,71 +1,75 @@
-# Trainer functions
-# BoMeyering 2024
+"""
+Trainer Classes
+BoMeyering 2024
+"""
 
-import torch
 import uuid
 import logging
 import argparse
-from abc import ABC, abstractmethod
-from tqdm import tqdm
-from datetime import datetime
-from src.eval import AverageMeterSet
-from src.fixmatch import get_pseudo_labels, mask_targets
-from src.callbacks import ModelCheckpoint
-from src.metrics import MetricLogger
 from typing import Tuple
 from pathlib import Path
-from torchmetrics.functional import dice
+from abc import ABC, abstractmethod
+from tqdm import tqdm
 
-import torch.nn.functional as F
+import torch
 import torch.distributed as dist
+import numpy as np
+
+from src.eval import AverageMeterSet
+from src.fixmatch import get_pseudo_labels
+from src.callbacks import ModelCheckpoint
+from src.metrics import MetricLogger
+from src.transforms import get_strong_transforms
+
 
 class Trainer(ABC):
+    """Abstract Trainer Class"""
+
     def __init__(self, name: str):
         super().__init__()
         self.name = name
         self.meters = AverageMeterSet()
 
     @abstractmethod
-    def _train_step(self):
+    def _train_step(self, batch):
         """Implement the train step for one batch"""
-        pass
 
     @abstractmethod
-    def _val_step(self):
+    def _val_step(self, batch):
         """Implement the val step for one batch"""
-        pass
-    
+
     @abstractmethod
-    def _train_epoch(self):
+    def _train_epoch(self, epoch):
         """Implement the training method for one epoch"""
-        pass
-    
+
     @abstractmethod
-    def _val_epoch(self):
+    def _val_epoch(self, epoch):
         """Implement the validation method for one epoch"""
-        pass
-    
+
     @abstractmethod
     def train(self):
         """Implement the whole training loop"""
-        pass
+
 
 class FixMatchTrainer(Trainer):
+    """Trainer Class for FixMatch Algorithm"""
+
     def __init__(
-            self, 
-            name, 
-            args: argparse.Namespace, 
-            model: torch.nn.Module, 
-            train_loaders, 
-            train_length, 
-            val_loader, 
-            optimizer, 
-            criterion, 
-            train_samplers=None,
-            scheduler=None, 
-            ema=None, 
-            tb_logger: torch.utils.tensorboard.writer.SummaryWriter=None,
-            class_map: dict=None):
+        self,
+        name,
+        args: argparse.Namespace,
+        model: torch.nn.Module,
+        train_loaders,
+        train_length,
+        val_loader,
+        optimizer,
+        criterion,
+        train_samplers=None,
+        scheduler=None,
+        ema=None,
+        tb_logger: torch.utils.tensorboard.writer.SummaryWriter = None,
+        class_map: dict = None,
+    ):
         super().__init__(name=name)
         self.trainer_id = "_".join(["fixmatch", str(uuid.uuid4())])
         self.args = args
@@ -81,93 +85,106 @@ class FixMatchTrainer(Trainer):
         self.logger = logging.getLogger()
         self.tb_logger = tb_logger
         self.class_map = class_map
+        self.transforms = get_strong_transforms(resize=args.model.resize)
 
         try:
             self.rank = dist.get_rank()
-        except ValueError as e:
+        except ValueError:
             self.rank = 0
 
         # setup metrics class
-        self.train_metrics = MetricLogger(num_classes=args.model.num_classes, device=args.device)
-        self.val_metrics = MetricLogger(num_classes=args.model.num_classes, device=args.device)
+        self.train_metrics = MetricLogger(
+            num_classes=args.model.num_classes, device=args.device
+        )
+        self.val_metrics = MetricLogger(
+            num_classes=args.model.num_classes, device=args.device
+        )
 
-        chkpt_path = Path('./model_checkpoints') / self.args.run_name
+        chkpt_path = Path("./model_checkpoints") / self.args.run_name
         self.checkpoint = ModelCheckpoint(filepath=chkpt_path, metadata=vars(self.args))
 
-    def _train_step(self, batches: Tuple):
+    def _train_step(self, batch: Tuple):
         "Train on one batch of labeled and unlabeled images."
         # Unpack batches
-        l_batch, u_batch = batches
+        l_batch, u_batch = batch
         l_img, l_targets = l_batch
-        weak_img, strong_img = u_batch
-        
-        # ***Deprecated***
-        # Concatenate all inputs and send to device 
-        # inputs = torch.cat((l_img, weak_img, strong_img)).float().to(self.args.device)
-        # l_targets = l_targets.long().to(self.args.device)
-        # ***Deprecated***
-        
-        # Send inputs and targets to device
-        inputs = torch.cat((l_img, strong_img)).float().to(self.args.device)
-        weak_inputs = weak_img.float().to(self.args.device)
-        l_targets = l_targets.long().to(self.args.device)
+        weak_img = u_batch
 
-        # Compute logits for labeled and unlabeled images
-        concat_logits = self.model(inputs)
-        l_logits = concat_logits[:len(l_img)]
-        strong_logits = concat_logits[len(l_img):]
-        
+        # Put labeled image and targets on device
+        l_img = l_img.to(self.args.device)
+        l_targets = l_targets.to(self.args.device)
+
+        # Send weak inputs to device and get logits
+        weak_inputs = weak_img.float().to(self.args.device)
         with torch.no_grad():
             weak_logits = self.model(weak_inputs)
 
-        # ***DEPRECATED***
-        # weak_logits, strong_logits = concat_logits[len(l_img): ].chunk(2) # grab the unlabeled logits and split into two
-        # ***DEPRECATED***
+        # Pseudo-label the unlabled images (calculated in @torch.no_grad() context)
+        weak_targets, weak_mask = get_pseudo_labels(self.args, weak_logits)
+
+        # Apply strong transforms to weak_img, pseudolabels, and conf_mask
+        weak_img_np = np.moveaxis(weak_img.cpu().numpy(), source=1, destination=3)
+        weak_targets = weak_targets.cpu().numpy().astype(np.uint8)
+        weak_mask = weak_mask.cpu().numpy().astype(np.uint8)
+
+        # Loop through weak transformations, apply strong transforms and output
+        strong_img = []
+        strong_targets = []
+        strong_mask = []
+        for zipped in zip(weak_img_np, weak_targets, weak_mask):
+            img, target, mask = zipped
+            transformed = self.transforms(image=img, target=target, conf_mask=mask)
+            strong_img.append(transformed["image"])
+            strong_targets.append(transformed["target"])
+            strong_mask.append(transformed["conf_mask"])
+
+        strong_img = torch.stack(strong_img).to(self.args.device)
+        strong_targets = torch.stack(strong_targets).to(self.args.device)
+        strong_mask = torch.stack(strong_mask).bool().to(self.args.device)
+
+        # Send strong data to device
+        inputs = torch.cat((l_img, strong_img)).float().to(self.args.device)
+        l_targets = l_targets.long().to(self.args.device)
+        strong_targets = strong_targets.long().to(self.args.device)
+
+        # Compute logits for labeled and strong unlabeled images
+        concat_logits = self.model(inputs)
+        l_logits = concat_logits[: len(l_img)]
+        strong_logits = concat_logits[len(l_img) :]
 
         # Calculate labeled loss
         l_loss = self.criterion(l_logits, l_targets)
 
-        # Pseudo-label the unlabled images (calculated in @torch.no_grad() context)
-        u_targets, mask = get_pseudo_labels(self.args, weak_logits)
-        
-        # Calculate the proportion of confident predictions
-        p = mask.float().mean().item()
+        # Calculate the fraction of confident predictions
+        f = strong_mask.float().mean().item()
 
         # Calculate scaled unlabeled loss
-        if p > 0:
-            u_loss = self.criterion(strong_logits, u_targets, mask)
-            scaled_u_loss = self.args.fixmatch.lam * p * u_loss
+        if f > 0:
+            u_loss = self.criterion(strong_logits, strong_targets, strong_mask)
+            scaled_u_loss = self.args.fixmatch.lam * f * u_loss
         else:
             scaled_u_loss = torch.tensor(0.0, device=self.args.device)
             if self.rank == 0:
-                self.logger.warn(f"No confident pseudo-labels were found. Unlabeled loss contribution is zero.")
-        
+                self.logger.warning(
+                    "No confident pseudo-labels were found. Unlabeled loss contribution is zero."
+                )
+
         total_loss = l_loss + scaled_u_loss
-        
-        # ***DEPRECATED
-        # Check for invalid loss
-        # if torch.isnan(u_loss):
-        #     if self.rank == 0:
-        #         self.logger.warn(f"NaN encountered in unlabeled loss. Setting to 0.")
-        #     u_loss = torch.tensor([0])
-        #     total_loss = l_loss
-        # else:
-        #     # Compute total loss
-        #     total_loss = l_loss + self.args.fixmatch.lam * u_loss
-        # ***DEPRECATED***
 
         # Update loss meters
         self.meters.update("total_loss", total_loss.item(), 1)
         self.meters.update("labeled_loss", l_loss.item(), l_logits.size()[0])
-        self.meters.update("unlabeled_loss", scaled_u_loss.item(), strong_logits.size()[0])
-    
+        self.meters.update(
+            "unlabeled_loss", scaled_u_loss.item(), strong_logits.size()[0]
+        )
+
         # Update metrics
         self.train_metrics.update(preds=l_logits, targets=l_targets)
 
-        return total_loss, l_loss, scaled_u_loss, p
-    
+        return total_loss, l_loss, scaled_u_loss, f
+
     def _train_epoch(self, epoch: int):
-        
+
         # Reset meters
         self.model.train()
         self.meters.reset()
@@ -191,7 +208,7 @@ class FixMatchTrainer(Trainer):
             batches = (next(train_l_loader), next(train_u_loader))
 
             # Train one batch and backpropagate
-            loss, l_loss, u_loss, p = self._train_step(batches)
+            loss, l_loss, u_loss, f = self._train_step(batches)
             loss.backward()
 
             # Step optimizer and update parameters for EMA
@@ -201,25 +218,34 @@ class FixMatchTrainer(Trainer):
 
             # Update progress bar
             p_bar.set_description(
-                "Train Epoch: {epoch}/{epochs:4}. Iter: {batch:4}/{iter:4}. LR: {lr:.6f}. Loss: {loss:.6f}".format(
+                "Train Epoch: {epoch}/{epochs:4}. Iter: {batch:4}/{iter:4}. LR: {lr:.6f}. Loss: {loss:.6f}. Conf: {f:.6f}".format(
                     epoch=epoch + 1,
                     epochs=self.args.model.epochs,
                     batch=batch_idx + 1,
                     iter=self.train_length,
                     lr=self.scheduler.get_last_lr()[0],
-                    loss = loss.item()
+                    loss=loss.item(),
+                    f=f,
                 )
             )
             p_bar.update()
 
             # Tensorboard batch writing
-            loss_dict = {"train_loss": loss, "train_labeled_loss": l_loss, "train_unlabeled_loss": u_loss}
-            p_dict = {"p_confident": p}
-            batch_step = (epoch*self.train_length) + batch_idx
+            loss_dict = {
+                "train_loss": loss,
+                "train_labeled_loss": l_loss,
+                "train_unlabeled_loss": u_loss,
+            }
+            f_dict = {"p_confident": f}
+            batch_step = (epoch * self.train_length) + batch_idx
             if self.rank == 0:
-                self.tb_logger.log_scalar_dict(main_tag='step_loss', scalar_dict=loss_dict, step=batch_step)
-                self.tb_logger.log_scalar_dict(main_tag='step_p', scalar_dict=p_dict, step=batch_step)
-                
+                self.tb_logger.log_scalar_dict(
+                    main_tag="step_loss", scalar_dict=loss_dict, step=batch_step
+                )
+                self.tb_logger.log_scalar_dict(
+                    main_tag="step_p", scalar_dict=f_dict, step=batch_step
+                )
+
             if batch_idx % 200 == 0:
                 avg_metrics, mc_metrics = self.train_metrics.compute()
                 print(avg_metrics)
@@ -231,32 +257,47 @@ class FixMatchTrainer(Trainer):
 
         # Compute epoch metrics and loss
         avg_metrics, mc_metrics = self.train_metrics.compute()
-        loss = self.meters['total_loss'].avg
-        l_loss = self.meters['labeled_loss'].avg
-        u_loss = self.meters['unlabeled_loss'].avg
+        loss = self.meters["total_loss"].avg
+        l_loss = self.meters["labeled_loss"].avg
+        u_loss = self.meters["unlabeled_loss"].avg
 
         # Set the epoch step
         epoch_step = epoch + 1
 
         # Epoch Loss Logging
-        loss_dict = tag_scalar_dict={"train_loss": loss, "train_labeled_loss": l_loss, "train_unlabeled_loss": u_loss}
+        loss_dict = {
+            "train_loss": loss,
+            "train_labeled_loss": l_loss,
+            "train_unlabeled_loss": u_loss,
+        }
 
         if self.rank == 0:
-            self.tb_logger.log_scalar_dict(main_tag='epoch_loss', scalar_dict=loss_dict, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch_step
+            )
 
             # Epoch Average Metric Logging
-            self.tb_logger.log_scalar_dict(main_tag='epoch_train_metrics', scalar_dict=avg_metrics, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_train_metrics", scalar_dict=avg_metrics, step=epoch_step
+            )
 
             # Epoch Multiclass Metric Logging
-            self.tb_logger.log_tensor_dict(main_tag='epoch_train_metrics', tensor_dict=mc_metrics, step=epoch_step, class_map=self.class_map)
+            self.tb_logger.log_tensor_dict(
+                main_tag="epoch_train_metrics",
+                tensor_dict=mc_metrics,
+                step=epoch_step,
+                class_map=self.class_map,
+            )
 
             # Logger Logging
-            self.logger.info(f"Epoch {epoch + 1} - Total Loss: {loss:.6f} Labeled Loss: {l_loss:.6f} Unlabeled Loss: {u_loss:.6f}")
+            self.logger.info(
+                f"Epoch {epoch + 1} - Total Loss: {loss:.6f} Labeled Loss: {l_loss:.6f} Unlabeled Loss: {u_loss:.6f}"
+            )
             self.logger.info(f"Epoch {epoch + 1} - Avg Metrics {avg_metrics}")
             self.logger.info(f"Epoch {epoch + 1} - Multiclass Metrics {mc_metrics}")
 
         return loss, l_loss, u_loss
-    
+
     @torch.no_grad()
     def _val_step(self, batch: Tuple):
 
@@ -301,29 +342,38 @@ class FixMatchTrainer(Trainer):
                     batch=batch_idx + 1,
                     iter=len(self.val_loader),
                     lr=self.scheduler.get_last_lr()[0],
-                    loss = loss.item()
+                    loss=loss.item(),
                 )
             )
             p_bar.update()
 
         # Compute epoch metrics
         avg_metrics, mc_metrics = self.val_metrics.compute()
-        loss = self.meters['validation_loss'].avg
+        loss = self.meters["validation_loss"].avg
 
         # Epoch step
         epoch_step = epoch + 1
 
         # Epoch Loss Logging
-        loss_dict = {'validation_loss': loss}
+        loss_dict = {"validation_loss": loss}
 
         if self.rank == 0:
-            self.tb_logger.log_scalar_dict(main_tag='epoch_loss', scalar_dict=loss_dict, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch_step
+            )
 
             # Epoch Average Validation Metric Logging
-            self.tb_logger.log_scalar_dict(main_tag='epoch_val_metrics', scalar_dict=avg_metrics, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_val_metrics", scalar_dict=avg_metrics, step=epoch_step
+            )
 
             # Epoch Multiclass Validation Metric Logging
-            self.tb_logger.log_tensor_dict(main_tag='epoch_val_metrics', tensor_dict=mc_metrics, step=epoch_step, class_map=self.class_map)
+            self.tb_logger.log_tensor_dict(
+                main_tag="epoch_val_metrics",
+                tensor_dict=mc_metrics,
+                step=epoch_step,
+                class_map=self.class_map,
+            )
 
             # Logger Logging
             self.logger.info(f"Epoch {epoch + 1} - Validation Loss: {loss:.6f}")
@@ -334,7 +384,9 @@ class FixMatchTrainer(Trainer):
 
     def train(self):
         if self.rank == 0:
-            self.logger.info(f'Training {self.trainer_id} for {self.args.model.epochs} epochs.')
+            self.logger.info(
+                f"Training {self.trainer_id} for {self.args.model.epochs} epochs."
+            )
         for epoch in range(self.args.model.epochs):
 
             # Update the epoch in the DistributedSamplers
@@ -344,31 +396,33 @@ class FixMatchTrainer(Trainer):
             # Train and validate one epoch
             train_loss = self._train_epoch(epoch)
             val_loss = self._val_epoch(epoch)
-            
+
             logs = {
-                'epoch': epoch,
-                'train_loss': torch.tensor(train_loss[0]),
-                'val_loss': torch.tensor(val_loss),
-                'model_state_dict': self.model.state_dict()
+                "epoch": epoch,
+                "train_loss": torch.tensor(train_loss[0]),
+                "val_loss": torch.tensor(val_loss),
+                "model_state_dict": self.model.state_dict(),
             }
 
             self.checkpoint(epoch=epoch, logs=logs)
 
+
 class SupervisedTrainer(Trainer):
     def __init__(
-            self, 
-            name, 
-            args: argparse.Namespace, 
-            model: torch.nn.Module, 
-            train_loader,
-            val_loader, 
-            optimizer, 
-            criterion, 
-            train_sampler=None,
-            scheduler=None, 
-            ema=None, 
-            tb_logger: torch.utils.tensorboard.writer.SummaryWriter=None,
-            class_map: dict=None):
+        self,
+        name,
+        args: argparse.Namespace,
+        model: torch.nn.Module,
+        train_loader,
+        val_loader,
+        optimizer,
+        criterion,
+        train_sampler=None,
+        scheduler=None,
+        ema=None,
+        tb_logger: torch.utils.tensorboard.writer.SummaryWriter = None,
+        class_map: dict = None,
+    ):
         super().__init__(name=name)
         self.trainer_id = "_".join(["supervised", str(uuid.uuid4())])
         self.args = args
@@ -386,21 +440,25 @@ class SupervisedTrainer(Trainer):
 
         try:
             self.rank = dist.get_rank()
-        except ValueError as e:
+        except ValueError:
             self.rank = 0
 
         # setup metrics class
-        self.train_metrics = MetricLogger(num_classes=args.model.num_classes, device=args.device)
-        self.val_metrics = MetricLogger(num_classes=args.model.num_classes, device=args.device)
+        self.train_metrics = MetricLogger(
+            num_classes=args.model.num_classes, device=args.device
+        )
+        self.val_metrics = MetricLogger(
+            num_classes=args.model.num_classes, device=args.device
+        )
 
-        chkpt_path = Path('./model_checkpoints') / self.args.run_name
+        chkpt_path = Path("./model_checkpoints") / self.args.run_name
         self.checkpoint = ModelCheckpoint(filepath=chkpt_path, metadata=vars(self.args))
 
     def _train_step(self, batch: Tuple):
-        
+
         # Unpack batch
         img, targets = batch
-        
+
         # Send inputs to device
         inputs = img.to(self.args.device)
         targets = targets.long().to(self.args.device)
@@ -416,9 +474,9 @@ class SupervisedTrainer(Trainer):
         self.train_metrics.update(preds=logits, targets=targets)
 
         return loss
-    
+
     def _train_epoch(self, epoch: int):
-        
+
         # Reset meters
         self.model.train()
         self.meters.reset()
@@ -451,16 +509,18 @@ class SupervisedTrainer(Trainer):
                     batch=batch_idx + 1,
                     iter=len(train_loader),
                     lr=self.scheduler.get_last_lr()[0],
-                    loss = loss.item()
+                    loss=loss.item(),
                 )
             )
             p_bar.update()
 
             # Tensorboard batch writing
             loss_dict = {"train_loss": loss}
-            batch_step = (epoch*len(train_loader)) + batch_idx
+            batch_step = (epoch * len(train_loader)) + batch_idx
             if self.rank == 0:
-                self.tb_logger.log_scalar_dict(main_tag='step_loss', scalar_dict=loss_dict, step=batch_step)
+                self.tb_logger.log_scalar_dict(
+                    main_tag="step_loss", scalar_dict=loss_dict, step=batch_step
+                )
 
             if batch_idx % 200 == 0:
                 avg_metrics, mc_metrics = self.train_metrics.compute()
@@ -473,21 +533,30 @@ class SupervisedTrainer(Trainer):
 
         # Compute epoch metrics and loss
         avg_metrics, mc_metrics = self.train_metrics.compute()
-        loss = self.meters['train_loss'].avg
+        loss = self.meters["train_loss"].avg
 
         # Set the epoch step
         epoch_step = epoch + 1
 
         # Epoch Loss Logging
-        loss_dict = tag_scalar_dict={"train_loss": loss}
+        loss_dict = tag_scalar_dict = {"train_loss": loss}
         if self.rank == 0:
-            self.tb_logger.log_scalar_dict(main_tag='epoch_loss', scalar_dict=loss_dict, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch_step
+            )
 
             # Epoch Average Metric Logging
-            self.tb_logger.log_scalar_dict(main_tag='epoch_train_metrics', scalar_dict=avg_metrics, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_train_metrics", scalar_dict=avg_metrics, step=epoch_step
+            )
 
             # Epoch Multiclass Metric Logging
-            self.tb_logger.log_tensor_dict(main_tag='epoch_train_metrics', tensor_dict=mc_metrics, step=epoch_step, class_map=self.class_map)
+            self.tb_logger.log_tensor_dict(
+                main_tag="epoch_train_metrics",
+                tensor_dict=mc_metrics,
+                step=epoch_step,
+                class_map=self.class_map,
+            )
 
             # Logger Logging
             self.logger.info(f"Epoch {epoch + 1} - Train Loss: {loss:.6f}")
@@ -495,7 +564,7 @@ class SupervisedTrainer(Trainer):
             self.logger.info(f"Epoch {epoch + 1} - Multiclass Metrics {mc_metrics}")
 
         # return loss
-    
+
     @torch.no_grad()
     def _val_step(self, batch: Tuple):
 
@@ -517,7 +586,7 @@ class SupervisedTrainer(Trainer):
         self.val_metrics.update(preds=logits, targets=targets)
 
         return loss
-    
+
     @torch.no_grad()
     def _val_epoch(self, epoch: int):
 
@@ -540,40 +609,51 @@ class SupervisedTrainer(Trainer):
                     batch=batch_idx + 1,
                     iter=len(self.val_loader),
                     lr=self.scheduler.get_last_lr()[0],
-                    loss = loss.item()
+                    loss=loss.item(),
                 )
             )
             p_bar.update()
 
         # Compute epoch metrics
         avg_metrics, mc_metrics = self.val_metrics.compute()
-        loss = self.meters['validation_loss'].avg
+        loss = self.meters["validation_loss"].avg
 
         # Epoch step
         epoch_step = epoch + 1
 
         # Epoch Loss Logging
-        loss_dict = {'validation_loss': loss}
+        loss_dict = {"validation_loss": loss}
 
         if self.rank == 0:
-            self.tb_logger.log_scalar_dict(main_tag='epoch_loss', scalar_dict=loss_dict, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch_step
+            )
 
             # Epoch Average Validation Metric Logging
-            self.tb_logger.log_scalar_dict(main_tag='epoch_val_metrics', scalar_dict=avg_metrics, step=epoch_step)
+            self.tb_logger.log_scalar_dict(
+                main_tag="epoch_val_metrics", scalar_dict=avg_metrics, step=epoch_step
+            )
 
             # Epoch Multiclass Validation Metric Logging
-            self.tb_logger.log_tensor_dict(main_tag='epoch_val_metrics', tensor_dict=mc_metrics, step=epoch_step, class_map=self.class_map)
+            self.tb_logger.log_tensor_dict(
+                main_tag="epoch_val_metrics",
+                tensor_dict=mc_metrics,
+                step=epoch_step,
+                class_map=self.class_map,
+            )
 
             # Logger Logging
             self.logger.info(f"Epoch {epoch + 1} - Validation Loss: {loss:.6f}")
             self.logger.info(f"Epoch {epoch + 1} - Avg Metrics {avg_metrics}")
             self.logger.info(f"Epoch {epoch + 1} - Multiclass Metrics {mc_metrics}")
-        
+
         return loss
-    
+
     def train(self):
         if self.rank == 0:
-            self.logger.info(f'Training {self.trainer_id} for {self.args.model.epochs} epochs.')
+            self.logger.info(
+                f"Training {self.trainer_id} for {self.args.model.epochs} epochs."
+            )
         for epoch in range(self.args.model.epochs):
 
             # Update the epoch in the DistributedSampler
@@ -583,15 +663,16 @@ class SupervisedTrainer(Trainer):
             # Train and validate one epoch
             train_loss = self._train_epoch(epoch)
             val_loss = self._val_epoch(epoch)
-            
+
             logs = {
-                'epoch': epoch,
-                'train_loss': torch.tensor(train_loss),
-                'val_loss': torch.tensor(val_loss),
-                'model_state_dict': self.model.state_dict()
+                "epoch": epoch,
+                "train_loss": torch.tensor(train_loss),
+                "val_loss": torch.tensor(val_loss),
+                "model_state_dict": self.model.state_dict(),
             }
 
             self.checkpoint(epoch=epoch, logs=logs)
+
 
 class TBLogger:
     def __init__(self, writer: torch.utils.tensorboard.writer.SummaryWriter):
@@ -601,10 +682,7 @@ class TBLogger:
         # Epoch Average Metric Logging
         for k, v in scalar_dict.items():
             self.writer.add_scalar(
-                tag=f'{main_tag}/{k}',
-                scalar_value=v,
-                global_step=step,
-                new_style=True
+                tag=f"{main_tag}/{k}", scalar_value=v, global_step=step, new_style=True
             )
 
     def log_tensor_dict(self, main_tag, tensor_dict, step, class_map):
@@ -614,9 +692,8 @@ class TBLogger:
             for i, tensor_value in enumerate(v):
                 class_name = class_map[i]
                 self.writer.add_scalar(
-                    tag=f'{main_tag}/{k}/{class_name}',
+                    tag=f"{main_tag}/{k}/{class_name}",
                     scalar_value=tensor_value,
                     global_step=step,
-                    new_style=True
+                    new_style=True,
                 )
-

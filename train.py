@@ -120,12 +120,12 @@ def main(args):
 
         fixmatch_trainer = FixMatchTrainer(
             name='Test_Trainer',
-            args=args, 
-            model=model, 
-            train_loaders = dataloaders, 
-            train_length=max_length, 
-            val_loader=val_dataloader, 
-            optimizer=optimizer, 
+            args=args,
+            model=model,
+            train_loaders = dataloaders,
+            train_length=max_length,
+            val_loader=val_dataloader,
+            optimizer=optimizer,
             criterion=loss_criterion,
             scheduler=scheduler,
             tb_logger=tb_logger,

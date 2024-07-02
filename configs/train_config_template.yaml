@@ -1,0 +1,54 @@
+# Training configs
+run_name: 
+device: cuda                                          # Either 'cpu' or 'gpu'
+directories:                                          # Main directories in project from root /
+  train_l_dir:
+  train_u_dir:
+  val_dir:
+  test_dir:
+  output_dir: outputs
+  log_dir: logs
+  chkpt_dir: model_checkpoints
+model: # Model specific configs
+  starting_weights: # Path to starting checkpoint
+  model_name: # Model architecture name
+  num_classes: # Total number of classes including the backbone
+  in_channels: 3                                      # Input tensor channels
+  encoder_name: # Encoder name
+  encoder_weights: imagenet # Encoder weights (not necessary if starting_weights defined)
+  encoder_depth: 5 # Encode depth
+  lab_bs: 5 # Labeled data batch size
+  unlab_bs: 2 # Unlabeled data batch size
+  resize: [512, 512] # Image resize dimensions    
+  epochs: # Total epochs
+optimizer:                                            
+  name: SGD # Name of optimizer  
+  weight_decay: 0.001 # L2 weight decay
+  filter_bias_and_bn: True # Generally True
+  ema: True # Exponential moving average of model parameters
+  ema_decay: 0.9 # EMA decay rate
+  lr: 0.005 # Initial learning rate
+  momentum: 0.99                                  
+  beta1:
+  beta2:
+  nesterov: True # For Nesterov momentum
+scheduler: # LR Scheduler parameters
+  name: ExponentialLR 
+  gamma: 0.9
+loss:             
+  name: CELoss # Main loss function. See src.losses
+  ignore_index: -1
+  label_smoothing: 0.0
+  alpha: 0.5
+  beta: 0.5
+  gamma: 2
+  eps: 0.0000001
+  reduction: 'mean'
+  loss_type: # Additional loss function if using a weighted loss like ACBLoss, RecallLoss, etc
+  use_weights: False # Use the inverse class weights (for CELoss)
+fixmatch:
+  tau: [.85] # Fixmatch Tau threshold
+  # tau: [.5, .5, .5, .5, .5, .5, .5, .5, .5, .5] # One float threshold value per class, if needed for finetuning
+  lam: 0.2 # Fixmatch scaling factor for unlabeled loss
+
+

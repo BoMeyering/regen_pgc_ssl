@@ -49,6 +49,8 @@ def get_strong_transforms(resize: Tuple=(512, 512), means: Iterable=means, std: 
     Returns:
         albumentations.Compose: A Compose function to use in the datasets. 
     """
+
+    print
     transforms = A.Compose([
         A.Resize(*resize, p=1),
         A.Affine(),
@@ -59,9 +61,8 @@ def get_strong_transforms(resize: Tuple=(512, 512), means: Iterable=means, std: 
         A.ChannelShuffle(),
         A.RGBShift(),
         A.Normalize(mean=means, std=std),
-        A.Normalize(),
         ToTensorV2()
-    ])
+    ], additional_targets={'target': 'mask', 'conf_mask': 'mask'})
 
     return transforms
 
