@@ -91,6 +91,8 @@ class FixMatchTrainer(Trainer):
             self.rank = dist.get_rank()
         except ValueError:
             self.rank = 0
+        except RunTimeError:
+            self.rank = 0
 
         # setup metrics class
         self.train_metrics = MetricLogger(
@@ -441,6 +443,8 @@ class SupervisedTrainer(Trainer):
         try:
             self.rank = dist.get_rank()
         except ValueError:
+            self.rank = 0
+        except RunTimeError:
             self.rank = 0
 
         # setup metrics class
